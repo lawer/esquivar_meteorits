@@ -1,0 +1,8 @@
+matplotlib==3.8.2
+numpy==1.26.3
+arcade==2.6.17
+
+neat-python==0.92
+graphviz==0.20.1
+aitk.utils==0.6.8
+aitk.algorithms==0.2.2
