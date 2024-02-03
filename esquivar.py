@@ -1,6 +1,8 @@
+import multiprocessing
 import random
 import arcade
 import neat
+from multiprocessing import Pool
 
 WIDTH = 800
 HEIGHT = 600
@@ -11,7 +13,7 @@ class Game(arcade.Window):
     def __init__(self, genome, config):
         super().__init__(WIDTH, HEIGHT, "NEAT Fuzzy UFO Game")
         self.genome = genome
-        self.config = config
+        self.conf = config
         self.net = neat.nn.FeedForwardNetwork.create(genome, config)
         self.player = arcade.Sprite("images/ufo_green.png")
         self.player.center_x = WIDTH // 2
@@ -24,7 +26,7 @@ class Game(arcade.Window):
             ((WIDTH * i) // 8, HEIGHT)
             for i in range(1, 9)
         ]
-        self.lives = 3
+        self.lives = 1
         self.score = 0
 
     def setup(self):
@@ -47,22 +49,19 @@ class Game(arcade.Window):
             self.projectile_counter = 0
 
     def move_player(self):
-        # Obtener la posición del proyectil más cercano
         closest_projectile = self.get_closest_projectile()
         projectile_position = (closest_projectile.center_x, closest_projectile.center_y) if closest_projectile else (0, 0)
 
-        # Utilizar la red neuronal para tomar decisiones
         output = self.net.activate((self.player.center_x, self.player.center_y, *projectile_position))
-        if output[0] > 0.5:
+        if output[0] < -0.1 and self.player.left > 0:
             self.player.change_x = -PLAYER_SPEED
-        elif output[1] > 0.5:
+        elif output[0] > 0.1 and self.player.right < WIDTH:
             self.player.change_x = PLAYER_SPEED
         else:
             self.player.change_x = 0
 
-        self.player.center_x += self.player.change_x
-        self.player.left = max(0, self.player.left)
-        self.player.right = min(WIDTH, self.player.right)
+        self.player.update()
+
 
     def create_projectile(self):
         spawn_point = random.choice(self.projectile_spawn_points)
@@ -85,7 +84,6 @@ class Game(arcade.Window):
                     self.game_over()
 
     def get_closest_projectile(self):
-        # Obtener el proyectil más cercano al jugador
         closest_projectile = None
         closest_distance = float('inf')
 
@@ -98,8 +96,9 @@ class Game(arcade.Window):
         return closest_projectile
 
     def game_over(self):
-        print("Game Over!")
+        print("Game Over! Score:", self.score)
         arcade.close_window()
+        arcade.exit()
 
     def on_key_press(self, key, modifiers):
         pass
@@ -108,21 +107,29 @@ class Game(arcade.Window):
         pass
 
 
-def eval_genomes(genomes, config):
-    for _, genome in genomes:
-        game = Game(genome, config)
-        game.setup()
-        arcade.run()
-        genome.fitness = game.score  # Ajusta la función de fitness según tus necesidades
+def eval_genome(genome, config):
+    game = Game(genome, config)
+    game.setup()
+    arcade.run()
+    return game.score
 
 
 def run_neat():
-    config_path = "path/to/your/config-file.txt"  # Reemplaza con la ruta de tu archivo de configuración NEAT
+    config_path = "config-file.txt"
     config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction,
                                 neat.DefaultSpeciesSet, neat.DefaultStagnation, config_path)
 
     population = neat.Population(config)
     population.add_reporter(neat.StdOutReporter(True))
     population.add_reporter(neat.StatisticsReporter())
+    population.add_reporter(neat.Checkpointer(1))
 
-    winner = population.run(eval_genomes, 10)  # Ajusta el número de generaciones según
+    pe = neat.ParallelEvaluator(20, eval_genome)
+
+    winner = population.run(pe.evaluate, 100)
+
+    print("Best genome:\n", winner)
+
+
+if __name__ == "__main__":
+    run_neat()
