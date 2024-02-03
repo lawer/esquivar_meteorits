@@ -50,15 +50,16 @@ class Game(arcade.Window):
 
     def move_player(self):
         closest_projectile = self.get_closest_projectile()
-        projectile_position = (closest_projectile.center_x, closest_projectile.center_y) if closest_projectile else (0, 0)
+        projectile_position = (closest_projectile.center_x, closest_projectile.bottom) if closest_projectile else None
 
-        output = self.net.activate((self.player.center_x, self.player.center_y, *projectile_position))
-        if output[0] < -0.1 and self.player.left > 0:
-            self.player.change_x = -PLAYER_SPEED
-        elif output[0] > 0.1 and self.player.right < WIDTH:
-            self.player.change_x = PLAYER_SPEED
-        else:
-            self.player.change_x = 0
+        if closest_projectile:
+            output = self.net.activate((self.player.center_x, self.player.center_y, *projectile_position))
+            if output[0] < -0.1 and self.player.left > 0:
+                self.player.change_x = -PLAYER_SPEED
+            elif output[0] > 0.1 and self.player.right < WIDTH:
+                self.player.change_x = PLAYER_SPEED
+            else:
+                self.player.change_x = 0
 
         self.player.update()
 
@@ -69,12 +70,16 @@ class Game(arcade.Window):
         self.projectiles.append(projectile)
 
     def update_projectiles(self):
+        closest_projectile = self.get_closest_projectile()
+
         for projectile in self.projectiles:
             projectile.center_y -= self.projectile_speed
 
             if projectile.top < 0:
                 projectile.kill()
-                self.score += 1
+
+                if closest_projectile == projectile:
+                    self.score += 1
 
             if arcade.check_for_collision(self.player, projectile):
                 projectile.kill()
