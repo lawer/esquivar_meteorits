@@ -9,8 +9,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from jupylet.state import State
 from jupylet.app import App
 from jupylet.sprite import Sprite
+import jupylet.rl
 
-app = App(width=800, height=600)
+esquivar = jupylet.rl.GameProcess('esquivar_jupylet')
+
+app = App()
 
 ufo = Sprite("images/ufo_green.png", x=app.width / 2, y=80)
 projectiles = []
@@ -27,16 +30,18 @@ state = State(
     lives=3
 )
 
+START = app.save_state('esquivar_jupylet', 'esquivar_jupylet.state', state)
+
 lives = Label(
     f'Score: {state.lives}', font_size=24, color="red",
     x=10, y=app.height - 32, anchor_x='left'
 )
 
-
 score = Label(
     f'Score: {state.score}', font_size=24,
     x=app.width - 10, y=app.height - 32, anchor_x='right'
 )
+
 
 @app.event
 def key_event(key, action, modifiers):
@@ -99,6 +104,7 @@ def update_projectiles(ct, dt):
             if state.lives <= 0:
                 app.stop()
 
+
 @app.event
 def render(ct, dt):
     app.window.clear()
@@ -110,6 +116,43 @@ def render(ct, dt):
 
     lives.draw()
     score.draw()
+
+
+def step(player=[0], n=1):
+    print('step', player, n)
+    if player[0] < -0.1:
+        state.left = True
+        state.right = False
+    elif player[0] > 0.1:
+        state.left = False
+        state.right = True
+    else:
+        state.left = False
+        state.right = False
+
+    if app.mode == 'hidden':
+        app.step(n)
+
+    reward = state.score
+
+    return observe(reward)
+
+
+def observe(reward=0):
+    return {
+        'screen0': app.observe(),
+        'player': {'score': state.score, 'reward': reward},
+    }
+
+
+def reset():
+    load(START)
+    return observe()
+
+
+def load(path):
+    app.load_state(path, state)
+    return observe()
 
 
 if __name__ == '__main__':

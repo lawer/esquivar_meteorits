@@ -6,4 +6,3 @@ neat-python==0.92
 graphviz==0.20.1
 aitk.utils==0.6.8
 aitk.algorithms==0.2.2
-jupylet==0.9.2
