@@ -12,11 +12,9 @@ GAME = None
 class Game(arcade.Window):
     def __init__(self):
         super().__init__(WIDTH, HEIGHT, "NEAT Fuzzy UFO Game")
-        self.genome = None
         self.conf = None
-        self.net = None
-        self.player = None
-        self.projectiles = arcade.SpriteList()
+        self.players = []
+        self.projectiles = None
         self.projectile_speed = 8
         self.projectile_frequency = 30
         self.projectile_counter = 0
@@ -27,30 +25,36 @@ class Game(arcade.Window):
         self.lives = 1
         self.score = 0
 
-    def setup(self, genome, config):
-        self.genome = genome
+    def setup(self, genomes, config):
         self.conf = config
-        self.net = neat.nn.FeedForwardNetwork.create(genome, config)
+
+        self.projectiles = arcade.SpriteList()
+        for genome_id, genome in genomes:
+            player = UFO("images/ufo_green.png", 1, genome, self)
+            self.players.append(player)
+
         arcade.set_background_color(arcade.color.BLACK)
-        self.player = UFO("images/ufo_green.png", 1, self.net, self)
         self.lives = 1
         self.score = 0
 
     def on_draw(self):
         arcade.start_render()
-        self.player.draw()
+        for player in self.players:
+            player.draw()
         self.projectiles.draw()
         arcade.draw_text(f"Lives: {self.lives}", 10, HEIGHT - 30, arcade.color.WHITE, 14)
         arcade.draw_text(f"Score: {self.score}", WIDTH - 100, HEIGHT - 30, arcade.color.WHITE, 14)
 
     def on_update(self, delta_time):
-        self.player.update()
         self.update_projectiles()
         self.projectile_counter += 1
 
         if self.projectile_counter == self.projectile_frequency:
             self.create_projectile()
             self.projectile_counter = 0
+
+        for player in self.players:
+            player.update()
 
     def create_projectile(self):
         spawn_point = random.choice(self.projectile_spawn_points)
@@ -65,20 +69,23 @@ class Game(arcade.Window):
                 projectile.kill()
                 self.score += 1
 
-            if arcade.check_for_collision(self.player, projectile):
-                projectile.kill()
-                self.lives -= 1
+            for player in self.players:
+                if arcade.check_for_collision(player, projectile):
+                    #projectile.kill()
+                    player.genome.fitness = self.score
+                    self.players.remove(player)
+                    player.kill()
 
-                if self.lives <= 0:
-                    self.game_over()
+                    if not self.players:
+                        self.game_over()
 
-    def get_closest_projectile(self):
+    def get_closest_projectile(self, player):
         # Obtener el proyectil más cercano al jugador
         closest_projectile = None
         closest_distance = float('inf')
 
         for projectile in self.projectiles:
-            distance = arcade.get_distance_between_sprites(self.player, projectile)
+            distance = arcade.get_distance_between_sprites(player, projectile)
             if distance < closest_distance:
                 closest_projectile = projectile
                 closest_distance = distance
@@ -91,16 +98,17 @@ class Game(arcade.Window):
 
 
 class UFO(arcade.Sprite):
-    def __init__(self, filename, scale, net, app):
+    def __init__(self, filename, scale, genome, app):
         super().__init__(filename, scale)
-        self.net = net
+        self.genome = genome
+        self.net = neat.nn.FeedForwardNetwork.create(genome, app.conf)
         self.app = app
         self.center_x = WIDTH // 2
         self.bottom = 10
 
     def update(self):
         # Obtener la posición del proyectil más cercano
-        closest_projectile = self.app.get_closest_projectile()
+        closest_projectile = self.app.get_closest_projectile(self)
         projectile_position = (closest_projectile.center_x, closest_projectile.center_y) if closest_projectile else (
             0, 0)
 
@@ -109,7 +117,7 @@ class UFO(arcade.Sprite):
         if output[0] > 0:
             self.change_x = PLAYER_SPEED
         elif output[0] < 0:
-            self.change_x = PLAYER_SPEED
+            self.change_x = -PLAYER_SPEED
         else:
             self.change_x = 0
 
@@ -120,11 +128,8 @@ class UFO(arcade.Sprite):
 
 def eval_genomes(genomes, config):
     global GAME
-    for _, genome in genomes:
-        GAME.setup(genome, config)
-        arcade.run()
-        genome.fitness = GAME.score  # Ajusta la función de fitness según tus necesidades
-        print(genome.fitness)
+    GAME.setup(genomes, config)
+    arcade.run()
 
 
 def run_neat():
