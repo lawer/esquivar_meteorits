@@ -13,7 +13,7 @@ class Game(arcade.Window):
     def __init__(self):
         super().__init__(WIDTH, HEIGHT, "NEAT Fuzzy UFO Game")
         self.conf = None
-        self.players = []
+        self.players = None
         self.projectiles = None
         self.projectile_speed = 8
         self.projectile_frequency = 30
@@ -29,6 +29,7 @@ class Game(arcade.Window):
         self.conf = config
 
         self.projectiles = arcade.SpriteList()
+        self.players = arcade.SpriteList()
         for genome_id, genome in genomes:
             player = UFO("images/ufo_green.png", 1, genome, self)
             self.players.append(player)
@@ -39,45 +40,31 @@ class Game(arcade.Window):
 
     def on_draw(self):
         arcade.start_render()
-        for player in self.players:
-            player.draw()
+        self.players.draw()
         self.projectiles.draw()
         arcade.draw_text(f"Lives: {self.lives}", 10, HEIGHT - 30, arcade.color.WHITE, 14)
         arcade.draw_text(f"Score: {self.score}", WIDTH - 100, HEIGHT - 30, arcade.color.WHITE, 14)
 
     def on_update(self, delta_time):
-        self.update_projectiles()
         self.projectile_counter += 1
 
         if self.projectile_counter == self.projectile_frequency:
             self.create_projectile()
             self.projectile_counter = 0
 
-        for player in self.players:
-            player.update()
+        self.projectiles.update()
+        self.players.update()
+
+        if not self.players:
+            self.game_over()
 
     def create_projectile(self):
         spawn_point = random.choice(self.projectile_spawn_points)
-        projectile = arcade.Sprite("images/meteor.png", center_x=spawn_point[0], center_y=spawn_point[1])
+        projectile = Projectile(
+            "images/meteor.png", 1, center_x=spawn_point[0], center_y=spawn_point[1], app=self
+        )
         self.projectiles.append(projectile)
 
-    def update_projectiles(self):
-        for projectile in self.projectiles:
-            projectile.center_y -= self.projectile_speed
-
-            if projectile.top < 0:
-                projectile.kill()
-                self.score += 1
-
-            for player in self.players:
-                if arcade.check_for_collision(player, projectile):
-                    #projectile.kill()
-                    player.genome.fitness = self.score
-                    self.players.remove(player)
-                    player.kill()
-
-                    if not self.players:
-                        self.game_over()
 
     def get_closest_projectile(self, player):
         # Obtener el proyectil más cercano al jugador
@@ -94,6 +81,9 @@ class Game(arcade.Window):
 
     def game_over(self):
         print("Game Over!")
+        self.players.clear()
+        self.projectiles.clear()
+
         arcade.exit()
 
 
@@ -107,23 +97,44 @@ class UFO(arcade.Sprite):
         self.bottom = 10
 
     def update(self):
+        self.move_player()
+
+        if arcade.check_for_collision_with_list(self, self.app.projectiles):
+            self.genome.fitness = self.app.score
+            self.kill()
+
+    def move_player(self):
         # Obtener la posición del proyectil más cercano
         closest_projectile = self.app.get_closest_projectile(self)
-        projectile_position = (closest_projectile.center_x, closest_projectile.center_y) if closest_projectile else (
-            0, 0)
+        projectile_position = (closest_projectile.center_x, closest_projectile.bottom) if closest_projectile else None
+        if projectile_position:
+            # Utilizar la red neuronal para tomar decisiones
+            output = self.net.activate((self.center_x, self.center_y, *projectile_position))
+            if output[0] > 0.1:
+                self.change_x = PLAYER_SPEED
+            elif output[0] < -0.1:
+                self.change_x = -PLAYER_SPEED
+            else:
+                self.change_x = 0
 
-        # Utilizar la red neuronal para tomar decisiones
-        output = self.net.activate((self.center_x, self.center_y, *projectile_position))
-        if output[0] > 0:
-            self.change_x = PLAYER_SPEED
-        elif output[0] < 0:
-            self.change_x = -PLAYER_SPEED
-        else:
-            self.change_x = 0
+            self.center_x += self.change_x
+            self.left = max(0, self.left)
+            self.right = min(WIDTH, self.right)
 
-        self.center_x += self.change_x
-        self.left = max(0, self.left)
-        self.right = min(WIDTH, self.right)
+
+class Projectile(arcade.Sprite):
+    def __init__(self, filename, scale, center_x=0, center_y=0, app=None):
+        super().__init__(filename, scale)
+        self.center_x = center_x
+        self.center_y = center_y
+        self.change_y = 5
+        self.app = app
+
+    def update(self):
+        self.center_y -= self.change_y
+        if self.top < 0:
+            self.kill()
+            self.app.score += 1
 
 
 def eval_genomes(genomes, config):
