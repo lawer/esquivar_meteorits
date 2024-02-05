@@ -2,6 +2,7 @@ import random
 
 import arcade
 import neat
+from aitk.algorithms.neat import visualize
 
 WIDTH = 800
 HEIGHT = 600
@@ -11,7 +12,7 @@ GAME = None
 
 class Game(arcade.Window):
     def __init__(self):
-        super().__init__(WIDTH, HEIGHT, "NEAT Fuzzy UFO Game")
+        super().__init__(WIDTH, HEIGHT, "NEAT Fuzzy UFO Game", antialiasing=False, visible=True)
         self.conf = None
         self.players = None
         self.projectiles = None
@@ -65,20 +66,6 @@ class Game(arcade.Window):
         )
         self.projectiles.append(projectile)
 
-
-    def get_closest_projectile(self, player):
-        # Obtener el proyectil más cercano al jugador
-        closest_projectile = None
-        closest_distance = float('inf')
-
-        for projectile in self.projectiles:
-            distance = arcade.get_distance_between_sprites(player, projectile)
-            if distance < closest_distance:
-                closest_projectile = projectile
-                closest_distance = distance
-
-        return closest_projectile
-
     def game_over(self):
         print("Game Over!")
         self.players.clear()
@@ -105,7 +92,11 @@ class UFO(arcade.Sprite):
 
     def move_player(self):
         # Obtener la posición del proyectil más cercano
-        closest_projectile = self.app.get_closest_projectile(self)
+        projectile_distance = arcade.get_closest_sprite(self, self.app.projectiles)
+        if not projectile_distance:
+            return
+
+        closest_projectile, distance = projectile_distance
         projectile_position = (closest_projectile.center_x, closest_projectile.bottom) if closest_projectile else None
         if projectile_position:
             # Utilizar la red neuronal para tomar decisiones
@@ -147,19 +138,26 @@ def run_neat():
     global GAME
 
     config_path = "config-file.txt"  # Reemplaza con la ruta de tu archivo de configuración NEAT
-    config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction,
-                                neat.DefaultSpeciesSet, neat.DefaultStagnation, config_path)
+    config = neat.config.Config(
+        neat.DefaultGenome,
+        neat.DefaultReproduction,
+        neat.DefaultSpeciesSet,
+        neat.DefaultStagnation,
+        config_path
+    )
 
     population = neat.Population(config)
     population.add_reporter(neat.StdOutReporter(True))
     population.add_reporter(neat.StatisticsReporter())
+    population.add_reporter(neat.Checkpointer(1))
 
     GAME = Game()
-    winner = population.run(eval_genomes, 10)  # Ajusta el número de generaciones según tus necesidades
+    winner = population.run(eval_genomes, 50)  # Ajusta el número de generaciones según tus necesidades
 
     # Puedes hacer lo que quieras con el ganador, como guardarlo en un archivo para su uso posterior
     print("Best genome:\n", winner)
 
+    visualize.draw_net(config, winner, True)
 
 if __name__ == "__main__":
     run_neat()
