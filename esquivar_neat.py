@@ -17,7 +17,7 @@ class Game(arcade.Window):
         self.players = None
         self.projectiles = None
         self.projectile_speed = 8
-        self.projectile_frequency = 30
+        self.projectile_frequency = 45
         self.projectile_counter = 0
         self.projectile_spawn_points = [
             ((WIDTH * i) // 8, HEIGHT)
@@ -51,15 +51,25 @@ class Game(arcade.Window):
             self.projectile_counter = 0
 
         self.projectiles.update()
+        for projectile in self.projectiles:
+            if projectile.top < 0:
+                projectile.kill()
+                self.score += 1
+
         self.players.update()
+        for player in self.players:
+            if arcade.check_for_collision_with_list(player, self.projectiles):
+                player.genome.fitness = self.score
+                player.kill()
 
         if not self.players:
             self.game_over()
 
+
     def create_projectile(self):
         spawn_point = random.choice(self.projectile_spawn_points)
         projectile = Projectile(
-            "images/meteor.png", 1, center_x=spawn_point[0], center_y=spawn_point[1], app=self
+            "images/meteor.png", 1, center_x=spawn_point[0], center_y=spawn_point[1]
         )
         self.projectiles.append(projectile)
 
@@ -82,10 +92,6 @@ class UFO(arcade.Sprite):
 
     def update(self):
         self.move_player()
-
-        if arcade.check_for_collision_with_list(self, self.app.projectiles):
-            self.genome.fitness = self.app.score
-            self.kill()
 
     def move_player(self):
         # Obtener la posición del proyectil más cercano
@@ -111,18 +117,14 @@ class UFO(arcade.Sprite):
 
 
 class Projectile(arcade.Sprite):
-    def __init__(self, filename, scale, center_x=0, center_y=0, app=None):
+    def __init__(self, filename, scale, center_x=0, center_y=0):
         super().__init__(filename, scale)
         self.center_x = center_x
         self.center_y = center_y
         self.change_y = 5
-        self.app = app
 
     def update(self):
         self.center_y -= self.change_y
-        if self.top < 0:
-            self.kill()
-            self.app.score += 1
 
 
 def eval_genomes(genomes, config):
@@ -155,6 +157,7 @@ def run_neat():
     print("Best genome:\n", winner)
 
     visualize.draw_net(config, winner, True)
+
 
 if __name__ == "__main__":
     run_neat()
