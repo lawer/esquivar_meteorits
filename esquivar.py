@@ -19,22 +19,18 @@ class Game(arcade.Window):
             ((WIDTH * i) // 16, HEIGHT)
             for i in range(1, 17)
         ]
-        self.scores = [0] * 4
-        self.colors = [arcade.color.GREEN, arcade.color.RED, arcade.color.BLUE_GRAY, arcade.color.YELLOW]
-        self.game_over = False
+        self.game_over = None
 
     def setup(self):
         self.projectiles = arcade.SpriteList()
+        self.players[0] = UFO("images/ufoGreen.png", 1, arcade.color.GREEN)
+        self.players[1] = UFO("images/ufoRed.png", 1, arcade.color.RED)
+        self.players[2] = UFO("images/ufoBlue.png", 1, arcade.color.BLUE_GRAY)
+        self.players[3] = UFO("images/ufoYellow.png", 1, arcade.color.YELLOW)
 
-        self.players[0] = UFO("images/ufoGreen.png", 1)
-        self.players[1] = UFO("images/ufoRed.png", 1)
-        self.players[2] = UFO("images/ufoBlue.png", 1)
-        self.players[3] = UFO("images/ufoYellow.png", 1)
+        self.game_over = False
 
         arcade.set_background_color(arcade.color.BLACK)
-
-        for score in self.scores:
-            self.score = score
 
     def on_draw(self):
         arcade.start_render()
@@ -45,19 +41,18 @@ class Game(arcade.Window):
         self.projectiles.draw()
 
         for i in range(4):
-            arcade.draw_text(f"Player {i + 1}", 50 + 200 * i, HEIGHT - 50, self.colors[i], 24)
-            arcade.draw_text(f"Score: {self.scores[i]}", 50 + 200 * i, HEIGHT - 85, arcade.color.WHITE, 24)
+            arcade.draw_text(f"Player {i + 1}", 50 + 200 * i, HEIGHT - 50, self.players[i].color, 24)
+            arcade.draw_text(f"Score: {self.players[i].score}", 50 + 200 * i, HEIGHT - 85, arcade.color.WHITE, 24)
 
         if self.game_over:
             arcade.draw_text("Game Over!", WIDTH // 2, HEIGHT // 2 + 20, arcade.color.RED, 48, anchor_x="center")
             # Show the winner, his score, his color and the other players' scores
-            winner = self.scores.index(max(self.scores)) + 1
-            winner_color = self.colors[winner - 1]
-            arcade.draw_text(f"Player {winner} wins!", WIDTH // 2, HEIGHT // 2 - 50, winner_color, 48, anchor_x="center")
+            winner = max(self.players, key=lambda player: player.score)
+            winner_pos = self.players.index(winner) + 1
+            arcade.draw_text(f"Player {winner_pos} wins!", WIDTH // 2, HEIGHT // 2 - 50, winner.color, 48, anchor_x="center")
 
-            for i, score in enumerate(self.scores):
-                color = self.colors[i]
-                arcade.draw_text(f"Player {i + 1}: {score}", WIDTH // 2, HEIGHT // 2 - 100 - 50 * i, color, 24, anchor_x="center")
+            for i, player in enumerate(self.players):
+                arcade.draw_text(f"Player {i + 1}: {player.score}", WIDTH // 2, HEIGHT // 2 - 100 - 50 * i, player.color, 24, anchor_x="center")
 
 
     def on_update(self, delta_time):
@@ -73,7 +68,7 @@ class Game(arcade.Window):
                 projectile.kill()
                 for i, player in enumerate(self.players):
                     if player.alive:
-                        self.scores[i] += 1
+                        player.score += 1
 
                     projectile.kill()
 
@@ -103,22 +98,25 @@ class Game(arcade.Window):
         arcade.exit()
 
     def on_key_press(self, key, modifiers):
-        if key == arcade.key.A:
-            self.players[0].change_x = -PLAYER_SPEED
-        elif key == arcade.key.S:
-            self.players[0].change_x = PLAYER_SPEED
-        elif key == arcade.key.F:
-            self.players[1].change_x = -PLAYER_SPEED
-        elif key == arcade.key.G:
-            self.players[1].change_x = PLAYER_SPEED
-        elif key == arcade.key.J:
-            self.players[2].change_x = -PLAYER_SPEED
-        elif key == arcade.key.K:
-            self.players[2].change_x = PLAYER_SPEED
-        elif key == arcade.key.LEFT:
-            self.players[3].change_x = -PLAYER_SPEED
-        elif key == arcade.key.RIGHT:
-            self.players[3].change_x = PLAYER_SPEED
+        if self.game_over:
+            self.setup()
+        else:
+            if key == arcade.key.A:
+                self.players[0].change_x = -PLAYER_SPEED
+            elif key == arcade.key.S:
+                self.players[0].change_x = PLAYER_SPEED
+            elif key == arcade.key.F:
+                self.players[1].change_x = -PLAYER_SPEED
+            elif key == arcade.key.G:
+                self.players[1].change_x = PLAYER_SPEED
+            elif key == arcade.key.J:
+                self.players[2].change_x = -PLAYER_SPEED
+            elif key == arcade.key.K:
+                self.players[2].change_x = PLAYER_SPEED
+            elif key == arcade.key.LEFT:
+                self.players[3].change_x = -PLAYER_SPEED
+            elif key == arcade.key.RIGHT:
+                self.players[3].change_x = PLAYER_SPEED
 
     def on_key_release(self, key, modifiers):
         if key == arcade.key.A or key == arcade.key.S:
@@ -132,11 +130,13 @@ class Game(arcade.Window):
 
 
 class UFO(arcade.Sprite):
-    def __init__(self, filename, scale):
+    def __init__(self, filename, scale, color):
         super().__init__(filename, scale)
         self.center_x = WIDTH // 2
         self.bottom = 10
         self.alive = True
+        self.score = 0
+        self.color = color
 
     def update(self):
         self.move_player()
