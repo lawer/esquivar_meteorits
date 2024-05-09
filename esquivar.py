@@ -69,11 +69,12 @@ class Game(arcade.Window):
             # Show the winner, his score, his color and the other players' scores
             winner = max(self.players, key=lambda player: player.score)
             winner_pos = self.players.index(winner) + 1
-            arcade.draw_text(f"Player {winner_pos} wins!", WIDTH // 2, HEIGHT // 2 - 50, winner.color, 48, anchor_x="center")
+            arcade.draw_text(f"Player {winner_pos} wins!", WIDTH // 2, HEIGHT // 2 - 50, winner.color, 48,
+                             anchor_x="center")
 
             for i, player in enumerate(self.players):
-                arcade.draw_text(f"Player {i + 1}: {player.score}", WIDTH // 2, HEIGHT // 2 - 100 - 50 * i, player.color, 24, anchor_x="center")
-
+                arcade.draw_text(f"Player {i + 1}: {player.score}", WIDTH // 2, HEIGHT // 2 - 100 - 50 * i,
+                                 player.color, 24, anchor_x="center")
 
     def on_update(self, delta_time):
         self.projectile_counter += 1
@@ -108,7 +109,7 @@ class Game(arcade.Window):
                             f.write(str(high_score))
 
         for i, joystick in enumerate(self.joysticks):
-            self.players[i].change_x =  joystick.x * PLAYER_SPEED
+            self.players[i].change_x = joystick.x * PLAYER_SPEED
 
     def create_projectile(self):
         spawn_point = random.choice(self.projectile_spawn_points)
@@ -157,6 +158,7 @@ class Game(arcade.Window):
     def on_joybutton_press(self, _joystick, button):
         if self.game_over:
             self.setup()
+
 
 class UFO(arcade.Sprite):
     def __init__(self, filename, scale, color):
