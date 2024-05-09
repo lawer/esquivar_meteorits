@@ -22,6 +22,8 @@ class Game(arcade.Window):
         self.game_over = None
         self.high_score = 0
 
+        self.joysticks = None
+
     def setup(self):
         self.projectiles = arcade.SpriteList()
         self.players[0] = UFO("images/ufoGreen.png", 1, arcade.color.GREEN)
@@ -36,6 +38,15 @@ class Game(arcade.Window):
                 self.high_score = int(f.read())
         except FileNotFoundError:
             self.high_score = 0
+
+        joysticks = arcade.get_joysticks()
+        # If we have any...
+        if joysticks:
+            self.joysticks = []
+            for joystick in joysticks:
+                self.joysticks.append(joystick)
+                joystick.open()
+                joystick.push_handlers(self)
 
         arcade.set_background_color(arcade.color.BLACK)
 
@@ -96,7 +107,8 @@ class Game(arcade.Window):
                         with open("high_score.txt", "w") as f:
                             f.write(str(high_score))
 
-                #self.game_over()
+        for i, joystick in enumerate(self.joysticks):
+            self.players[i].change_x =  joystick.x * PLAYER_SPEED
 
     def create_projectile(self):
         spawn_point = random.choice(self.projectile_spawn_points)
@@ -142,6 +154,9 @@ class Game(arcade.Window):
         elif key == arcade.key.LEFT or key == arcade.key.RIGHT:
             self.players[3].change_x = 0
 
+    def on_joybutton_press(self, _joystick, button):
+        if self.game_over:
+            self.setup()
 
 class UFO(arcade.Sprite):
     def __init__(self, filename, scale, color):
