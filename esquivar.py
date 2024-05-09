@@ -65,15 +65,15 @@ class Game(arcade.Window):
         arcade.draw_text(f"High Score: {self.high_score}", WIDTH - 760, HEIGHT - 550, arcade.color.WHITE, 24)
 
         if self.game_over:
-            arcade.draw_text("Game Over!", WIDTH // 2, HEIGHT // 2 + 20, arcade.color.RED, 48, anchor_x="center")
+            arcade.draw_text("Game Over!", WIDTH // 2, HEIGHT // 2 + 40, arcade.color.RED, 48, anchor_x="center")
             # Show the winner, his score, his color and the other players' scores
             winner = max(self.players, key=lambda player: player.score)
             winner_pos = self.players.index(winner) + 1
-            arcade.draw_text(f"Player {winner_pos} wins!", WIDTH // 2, HEIGHT // 2 - 50, winner.color, 48,
+            arcade.draw_text(f"Player {winner_pos} wins!", WIDTH // 2, HEIGHT // 2 - 30, winner.color, 48,
                              anchor_x="center")
 
             for i, player in enumerate(self.players):
-                arcade.draw_text(f"Player {i + 1}: {player.score}", WIDTH // 2, HEIGHT // 2 - 100 - 50 * i,
+                arcade.draw_text(f"Player {i + 1}: {player.score}", WIDTH // 2, HEIGHT // 2 - 80 - 50 * i,
                                  player.color, 24, anchor_x="center")
 
     def on_update(self, delta_time):
