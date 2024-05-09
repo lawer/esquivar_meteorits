@@ -20,6 +20,7 @@ class Game(arcade.Window):
             for i in range(1, 17)
         ]
         self.game_over = None
+        self.high_score = 0
 
     def setup(self):
         self.projectiles = arcade.SpriteList()
@@ -29,6 +30,12 @@ class Game(arcade.Window):
         self.players[3] = UFO("images/ufoYellow.png", 1, arcade.color.YELLOW)
 
         self.game_over = False
+
+        try:
+            with open("high_score.txt") as f:
+                self.high_score = int(f.read())
+        except FileNotFoundError:
+            self.high_score = 0
 
         arcade.set_background_color(arcade.color.BLACK)
 
@@ -43,6 +50,8 @@ class Game(arcade.Window):
         for i in range(4):
             arcade.draw_text(f"Player {i + 1}", 50 + 200 * i, HEIGHT - 50, self.players[i].color, 24)
             arcade.draw_text(f"Score: {self.players[i].score}", 50 + 200 * i, HEIGHT - 85, arcade.color.WHITE, 24)
+
+        arcade.draw_text(f"High Score: {self.high_score}", WIDTH - 760, HEIGHT - 550, arcade.color.WHITE, 24)
 
         if self.game_over:
             arcade.draw_text("Game Over!", WIDTH // 2, HEIGHT // 2 + 20, arcade.color.RED, 48, anchor_x="center")
@@ -81,7 +90,12 @@ class Game(arcade.Window):
 
                 if all([not player.alive for player in self.players]):
                     self.game_over = True
-                    break
+                    high_score = max(player.score for player in self.players)
+                    if high_score > self.high_score:
+                        self.high_score = high_score
+                        with open("high_score.txt", "w") as f:
+                            f.write(str(high_score))
+
                 #self.game_over()
 
     def create_projectile(self):
