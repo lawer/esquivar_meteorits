@@ -1,15 +1,38 @@
 import random
+from typing import List
 
 import arcade
 
-WIDTH = 800
-HEIGHT = 600
-PLAYER_SPEED = 5
+FULL_SCREEN = False
+SCALE = 1
+BASE_WIDTH = 800
+BASE_HEIGHT = 600
+PLAYER_SPEED_BASE = 5
+PLAYER_SPEED = PLAYER_SPEED_BASE * SCALE
+CHANGE_Y_BASE = 5
+CHANGE_Y = CHANGE_Y_BASE * SCALE
+WIDTH = BASE_WIDTH * SCALE
+HEIGHT = BASE_HEIGHT * SCALE
+BIG_FONT_BASE = 48
+BIG_FONT = BIG_FONT_BASE * SCALE
+MED_FONT_BASE = 24
+MED_FONT = MED_FONT_BASE * SCALE
+SMALL_FONT_BASE = 22
+SMALL_FONT = SMALL_FONT_BASE * SCALE
 
 
 class Game(arcade.Window):
+    players: List['UFO|None']
+    projectiles: arcade.SpriteList | None
+    projectile_speed: int
+    projectile_frequency: int
+    projectile_counter: int
+    projectile_spawn_points: List[tuple[int, int]]
+    game_over: bool | None
+    high_score: int
+
     def __init__(self):
-        super().__init__(WIDTH, HEIGHT, "UFO Game", antialiasing=False, visible=True)
+        super().__init__(WIDTH, HEIGHT, "UFO Game", antialiasing=True, visible=True, fullscreen=FULL_SCREEN)
         self.players = [None] * 4
         self.projectiles = None
         self.projectile_speed = 8
@@ -26,10 +49,10 @@ class Game(arcade.Window):
 
     def setup(self):
         self.projectiles = arcade.SpriteList()
-        self.players[0] = UFO("images/ufoGreen.png", 1, arcade.color.GREEN)
-        self.players[1] = UFO("images/ufoRed.png", 1, arcade.color.RED)
-        self.players[2] = UFO("images/ufoBlue.png", 1, arcade.color.BLUE_GRAY)
-        self.players[3] = UFO("images/ufoYellow.png", 1, arcade.color.YELLOW)
+        self.players[0] = UFO("images/ufoGreen.png", SCALE, arcade.color.GREEN)
+        self.players[1] = UFO("images/ufoRed.png", SCALE, arcade.color.RED)
+        self.players[2] = UFO("images/ufoBlue.png", SCALE, arcade.color.BLUE_GRAY)
+        self.players[3] = UFO("images/ufoYellow.png", SCALE, arcade.color.YELLOW)
 
         self.game_over = False
 
@@ -42,12 +65,12 @@ class Game(arcade.Window):
         joysticks = arcade.get_joysticks()
         # If we have any...
         if joysticks:
-            self.joysticks = []
             for joystick in joysticks:
                 self.joysticks.append(joystick)
                 joystick.open()
                 joystick.push_handlers(self)
-
+        else:
+            self.joysticks = []
         arcade.set_background_color(arcade.color.BLACK)
 
     def on_draw(self):
@@ -59,22 +82,22 @@ class Game(arcade.Window):
         self.projectiles.draw()
 
         for i in range(4):
-            arcade.draw_text(f"Player {i + 1}", 50 + 200 * i, HEIGHT - 50, self.players[i].color, 24)
-            arcade.draw_text(f"Score: {self.players[i].score}", 50 + 200 * i, HEIGHT - 85, arcade.color.WHITE, 24)
+            arcade.draw_text(f"Player {i + 1}", 50 + 200 * i, HEIGHT - 50, self.players[i].color, MED_FONT)
+            arcade.draw_text(f"Score: {self.players[i].score}", 50 + 200 * i, HEIGHT - 85, arcade.color.WHITE, MED_FONT)
 
-        arcade.draw_text(f"High Score: {self.high_score}", WIDTH - 760, HEIGHT - 550, arcade.color.WHITE, 24)
+        arcade.draw_text(f"High Score: {self.high_score}", 75, 75, arcade.color.WHITE, SMALL_FONT)
 
         if self.game_over:
-            arcade.draw_text("Game Over!", WIDTH // 2, HEIGHT // 2 + 40, arcade.color.RED, 48, anchor_x="center")
+            arcade.draw_text("Game Over!", WIDTH // 2, HEIGHT // 2 + 40, arcade.color.RED, BIG_FONT, anchor_x="center")
             # Show the winner, his score, his color and the other players' scores
             winner = max(self.players, key=lambda player: player.score)
             winner_pos = self.players.index(winner) + 1
-            arcade.draw_text(f"Player {winner_pos} wins!", WIDTH // 2, HEIGHT // 2 - 30, winner.color, 48,
+            arcade.draw_text(f"Player {winner_pos} wins!", WIDTH // 2, HEIGHT // 2 - 30, winner.color, BIG_FONT,
                              anchor_x="center")
 
             for i, player in enumerate(self.players):
                 arcade.draw_text(f"Player {i + 1}: {player.score}", WIDTH // 2, HEIGHT // 2 - 80 - 50 * i,
-                                 player.color, 24, anchor_x="center")
+                                 player.color, MED_FONT, anchor_x="center")
 
     def on_update(self, delta_time):
         self.projectile_counter += 1
@@ -114,7 +137,7 @@ class Game(arcade.Window):
     def create_projectile(self):
         spawn_point = random.choice(self.projectile_spawn_points)
         projectile = Projectile(
-            "images/meteor.png", 1, center_x=spawn_point[0], center_y=spawn_point[1]
+            "images/meteor.png", SCALE, center_x=spawn_point[0], center_y=spawn_point[1]
         )
         self.projectiles.append(projectile)
 
@@ -125,7 +148,9 @@ class Game(arcade.Window):
         arcade.exit()
 
     def on_key_press(self, key, modifiers):
-        if self.game_over:
+        if key == arcade.key.ESCAPE:
+            arcade.exit()
+        elif self.game_over:
             self.setup()
         else:
             if key == arcade.key.A:
@@ -183,7 +208,7 @@ class Projectile(arcade.Sprite):
         super().__init__(filename, scale)
         self.center_x = center_x
         self.center_y = center_y
-        self.change_y = 5
+        self.change_y = CHANGE_Y
 
     def update(self):
         self.center_y -= self.change_y

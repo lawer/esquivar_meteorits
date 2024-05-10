@@ -31,7 +31,7 @@ class Game(arcade.Window):
         self.projectiles = arcade.SpriteList()
         self.players = arcade.SpriteList()
         for genome_id, genome in genomes:
-            player = UFO("images/ufo_green.png", 1, genome, self)
+            player = UFO("images/ufoGreen.png", 1, genome, self)
             self.players.append(player)
 
         arcade.set_background_color(arcade.color.BLACK)
