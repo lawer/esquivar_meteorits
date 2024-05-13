@@ -28,7 +28,7 @@ NUM_SPAWN_POINTS = 16
 
 
 class Game(arcade.Window):
-    players: List['UFO|None']
+    players: List["UFO|None"]
     projectiles: arcade.SpriteList | None
     projectile_speed: int
     projectile_frequency: int
@@ -38,7 +38,14 @@ class Game(arcade.Window):
     high_score: int
 
     def __init__(self):
-        super().__init__(WIDTH, HEIGHT, "UFO Game", antialiasing=True, visible=True, fullscreen=FULL_SCREEN)
+        super().__init__(
+            WIDTH,
+            HEIGHT,
+            "UFO Game",
+            antialiasing=True,
+            visible=True,
+            fullscreen=FULL_SCREEN,
+        )
 
         _left = SCREEN_WIDTH // 2 - WIDTH // 2
         _top = SCREEN_HEIGHT // 2 - HEIGHT // 2
@@ -96,26 +103,55 @@ class Game(arcade.Window):
         self.projectiles.draw()
 
         for i in range(4):
-            arcade.draw_text(f"Player {i + 1}", 70 + 250 * SCALE * i, HEIGHT - 50 * SCALE, self.players[i].color,
-                             MED_FONT)
-            arcade.draw_text(f"Score: {self.players[i].score}",
-                             70 + 250 * SCALE * i, HEIGHT - 85 * SCALE, arcade.color.WHITE, MED_FONT)
+            arcade.draw_text(
+                f"Player {i + 1}",
+                70 + 250 * SCALE * i,
+                HEIGHT - 50 * SCALE,
+                self.players[i].color,
+                MED_FONT,
+            )
+            arcade.draw_text(
+                f"Score: {self.players[i].score}",
+                70 + 250 * SCALE * i,
+                HEIGHT - 85 * SCALE,
+                arcade.color.WHITE,
+                MED_FONT,
+            )
 
-        arcade.draw_text(f"High Score: {self.high_score}", 50, 50, arcade.color.WHITE, SMALL_FONT)
+        arcade.draw_text(
+            f"High Score: {self.high_score}", 50, 50, arcade.color.WHITE, SMALL_FONT
+        )
 
         if self.game_over:
-            arcade.draw_text("Game Over!", WIDTH // 2, HEIGHT // 2 + 80 * SCALE, arcade.color.RED, BIG_FONT,
-                             anchor_x="center")
+            arcade.draw_text(
+                "Game Over!",
+                WIDTH // 2,
+                HEIGHT // 2 + 80 * SCALE,
+                arcade.color.RED,
+                BIG_FONT,
+                anchor_x="center",
+            )
             # Show the winner, his score, his color and the other players' scores
             winner = max(self.players, key=lambda player: player.score)
             winner_pos = self.players.index(winner) + 1
-            arcade.draw_text(f"Player {winner_pos} wins!", WIDTH // 2, HEIGHT // 2 - 10 * SCALE, winner.color, BIG_FONT,
-                             anchor_x="center")
+            arcade.draw_text(
+                f"Player {winner_pos} wins!",
+                WIDTH // 2,
+                HEIGHT // 2 - 10 * SCALE,
+                winner.color,
+                BIG_FONT,
+                anchor_x="center",
+            )
 
             for i, player in enumerate(self.players):
-                arcade.draw_text(f"Player {i + 1}: {player.score}", WIDTH // 2,
-                                 HEIGHT // 2 - 80 * SCALE - 50 * SCALE * i,
-                                 player.color, MED_FONT, anchor_x="center")
+                arcade.draw_text(
+                    f"Player {i + 1}: {player.score}",
+                    WIDTH // 2,
+                    HEIGHT // 2 - 80 * SCALE - 50 * SCALE * i,
+                    player.color,
+                    MED_FONT,
+                    anchor_x="center",
+                )
 
     def on_update(self, delta_time):
         global CHANGE_Y
@@ -163,7 +199,11 @@ class Game(arcade.Window):
         image_index = random.randint(1, 4)
         image_name = f"images/meteorBrown_big{image_index}.png"
         projectile = Projectile(
-            image_name, SCALE, center_x=spawn_point[0], center_y=spawn_point[1]
+            image_name,
+            SCALE,
+            center_x=spawn_point[0],
+            center_y=spawn_point[1],
+            projectile_speed=self.projectile_speed,
         )
         self.projectiles.append(projectile)
 
@@ -230,11 +270,13 @@ class UFO(arcade.Sprite):
 
 
 class Projectile(arcade.Sprite):
-    def __init__(self, filename, scale, center_x=0, center_y=0):
+    def __init__(
+        self, filename, scale, center_x=0, center_y=0, projectile_speed=CHANGE_Y
+    ):
         super().__init__(filename, scale)
         self.center_x = center_x
         self.center_y = center_y
-        self.change_y = CHANGE_Y
+        self.change_y = projectile_speed
 
     def update(self):
         self.center_y -= self.change_y
