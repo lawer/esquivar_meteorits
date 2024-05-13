@@ -138,8 +138,8 @@ class Game(arcade.Window):
                     projectile.kill()
 
                 if self.score % 10 == 0:
-                    CHANGE_Y += 0.1
-                    self.projectile_frequency -= 0.1
+                    self.projectile_speed += 1
+                    self.projectile_frequency -= 1
 
         for player in self.players:
             player.update()
