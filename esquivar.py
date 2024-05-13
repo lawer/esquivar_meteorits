@@ -4,9 +4,14 @@ from typing import List
 import arcade
 
 FULL_SCREEN = False
-SCALE = 1
-BASE_WIDTH = 800
-BASE_HEIGHT = 600
+SCALE = 3
+BASE_WIDTH = 1024
+BASE_HEIGHT = 768
+
+SCREEN_WIDTH = arcade.get_display_size()[0]
+SCREEN_HEIGHT = arcade.get_display_size()[1]
+SCALE = min(SCREEN_WIDTH // BASE_WIDTH, SCREEN_HEIGHT // BASE_HEIGHT)
+
 PLAYER_SPEED_BASE = 5
 PLAYER_SPEED = PLAYER_SPEED_BASE * SCALE
 CHANGE_Y_BASE = 5
@@ -19,6 +24,7 @@ MED_FONT_BASE = 24
 MED_FONT = MED_FONT_BASE * SCALE
 SMALL_FONT_BASE = 22
 SMALL_FONT = SMALL_FONT_BASE * SCALE
+NUM_SPAWN_POINTS = 16
 
 
 class Game(arcade.Window):
@@ -33,16 +39,22 @@ class Game(arcade.Window):
 
     def __init__(self):
         super().__init__(WIDTH, HEIGHT, "UFO Game", antialiasing=True, visible=True, fullscreen=FULL_SCREEN)
+
+        _left = SCREEN_WIDTH // 2 - WIDTH // 2
+        _top = SCREEN_HEIGHT // 2 - HEIGHT // 2
+        self.set_location(_left, _top)
+
         self.players = [None] * 4
         self.projectiles = None
-        self.projectile_speed = 8
+        self.projectile_speed = CHANGE_Y
         self.projectile_frequency = 30
         self.projectile_counter = 0
         self.projectile_spawn_points = [
-            ((WIDTH * i) // 16, HEIGHT)
-            for i in range(1, 17)
+            ((WIDTH * i) // NUM_SPAWN_POINTS, HEIGHT)
+            for i in range(1, NUM_SPAWN_POINTS + 1)
         ]
         self.game_over = None
+        self.score = 0
         self.high_score = 0
 
         self.joysticks = None
@@ -55,6 +67,8 @@ class Game(arcade.Window):
         self.players[3] = UFO("images/ufoYellow.png", SCALE, arcade.color.YELLOW)
 
         self.game_over = False
+
+        self.score = 0
 
         try:
             with open("high_score.txt") as f:
@@ -82,24 +96,30 @@ class Game(arcade.Window):
         self.projectiles.draw()
 
         for i in range(4):
-            arcade.draw_text(f"Player {i + 1}", 50 + 200 * i, HEIGHT - 50, self.players[i].color, MED_FONT)
-            arcade.draw_text(f"Score: {self.players[i].score}", 50 + 200 * i, HEIGHT - 85, arcade.color.WHITE, MED_FONT)
+            arcade.draw_text(f"Player {i + 1}", 70 + 250 * SCALE * i, HEIGHT - 50 * SCALE, self.players[i].color,
+                             MED_FONT)
+            arcade.draw_text(f"Score: {self.players[i].score}",
+                             70 + 250 * SCALE * i, HEIGHT - 85 * SCALE, arcade.color.WHITE, MED_FONT)
 
-        arcade.draw_text(f"High Score: {self.high_score}", 75, 75, arcade.color.WHITE, SMALL_FONT)
+        arcade.draw_text(f"High Score: {self.high_score}", 50, 50, arcade.color.WHITE, SMALL_FONT)
 
         if self.game_over:
-            arcade.draw_text("Game Over!", WIDTH // 2, HEIGHT // 2 + 40, arcade.color.RED, BIG_FONT, anchor_x="center")
+            arcade.draw_text("Game Over!", WIDTH // 2, HEIGHT // 2 + 80 * SCALE, arcade.color.RED, BIG_FONT,
+                             anchor_x="center")
             # Show the winner, his score, his color and the other players' scores
             winner = max(self.players, key=lambda player: player.score)
             winner_pos = self.players.index(winner) + 1
-            arcade.draw_text(f"Player {winner_pos} wins!", WIDTH // 2, HEIGHT // 2 - 30, winner.color, BIG_FONT,
+            arcade.draw_text(f"Player {winner_pos} wins!", WIDTH // 2, HEIGHT // 2 - 10 * SCALE, winner.color, BIG_FONT,
                              anchor_x="center")
 
             for i, player in enumerate(self.players):
-                arcade.draw_text(f"Player {i + 1}: {player.score}", WIDTH // 2, HEIGHT // 2 - 80 - 50 * i,
+                arcade.draw_text(f"Player {i + 1}: {player.score}", WIDTH // 2,
+                                 HEIGHT // 2 - 80 * SCALE - 50 * SCALE * i,
                                  player.color, MED_FONT, anchor_x="center")
 
     def on_update(self, delta_time):
+        global CHANGE_Y
+
         self.projectile_counter += 1
 
         if self.projectile_counter == self.projectile_frequency:
@@ -110,11 +130,16 @@ class Game(arcade.Window):
         for projectile in self.projectiles:
             if projectile.top < 0:
                 projectile.kill()
+                self.score += 1
                 for i, player in enumerate(self.players):
                     if player.alive:
                         player.score += 1
 
                     projectile.kill()
+
+                if self.score % 10 == 0:
+                    CHANGE_Y += 0.1
+                    self.projectile_frequency -= 0.1
 
         for player in self.players:
             player.update()
@@ -123,21 +148,22 @@ class Game(arcade.Window):
                 player.kill()
                 player.alive = False
 
-                if all([not player.alive for player in self.players]):
-                    self.game_over = True
-                    high_score = max(player.score for player in self.players)
-                    if high_score > self.high_score:
-                        self.high_score = high_score
-                        with open("high_score.txt", "w") as f:
-                            f.write(str(high_score))
+        if all([not player.alive for player in self.players]):
+            self.game_over = True
+            if self.score > self.high_score:
+                self.high_score = self.score
+                with open("high_score.txt", "w") as f:
+                    f.write(str(self.score))
 
         for i, joystick in enumerate(self.joysticks):
             self.players[i].change_x = joystick.x * PLAYER_SPEED
 
     def create_projectile(self):
         spawn_point = random.choice(self.projectile_spawn_points)
+        image_index = random.randint(1, 4)
+        image_name = f"images/meteorBrown_big{image_index}.png"
         projectile = Projectile(
-            "images/meteor.png", SCALE, center_x=spawn_point[0], center_y=spawn_point[1]
+            image_name, SCALE, center_x=spawn_point[0], center_y=spawn_point[1]
         )
         self.projectiles.append(projectile)
 
