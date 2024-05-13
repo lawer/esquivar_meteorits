@@ -4,12 +4,13 @@ from typing import List
 import arcade
 
 FULL_SCREEN = False
-SCALE = 3
 BASE_WIDTH = 1024
 BASE_HEIGHT = 768
 
 SCREEN_WIDTH = arcade.get_display_size()[0]
 SCREEN_HEIGHT = arcade.get_display_size()[1]
+
+# SCALE = 3
 SCALE = min(SCREEN_WIDTH // BASE_WIDTH, SCREEN_HEIGHT // BASE_HEIGHT)
 
 PLAYER_SPEED_BASE = 5
@@ -252,6 +253,12 @@ class Game(arcade.Window):
 
 
 class UFO(arcade.Sprite):
+    center_x: int
+    bottom: int
+    alive: bool
+    score: int
+    color: arcade.color
+
     def __init__(self, filename, scale, color):
         super().__init__(filename, scale)
         self.center_x = WIDTH // 2
@@ -270,6 +277,10 @@ class UFO(arcade.Sprite):
 
 
 class Projectile(arcade.Sprite):
+    center_x: float
+    center_y: float
+    change_y: float
+
     def __init__(
         self, filename, scale, center_x=0, center_y=0, projectile_speed=CHANGE_Y
     ):
