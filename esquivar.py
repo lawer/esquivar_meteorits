@@ -30,12 +30,12 @@ NUM_SPAWN_POINTS = 16
 
 class Game(arcade.Window):
     players: List["UFO"]
-    projectiles: arcade.SpriteList | None
+    projectiles: arcade.SpriteList
     projectile_speed: int
     projectile_frequency: int
     projectile_counter: int
     projectile_spawn_points: List[tuple[int, int]]
-    game_over: bool | None
+    game_over: bool
     high_score: int
 
     def __init__(self):
