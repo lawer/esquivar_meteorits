@@ -29,7 +29,7 @@ NUM_SPAWN_POINTS = 16
 
 
 class Game(arcade.Window):
-    players: List["UFO|None"]
+    players: List["UFO"]
     projectiles: arcade.SpriteList | None
     projectile_speed: int
     projectile_frequency: int
