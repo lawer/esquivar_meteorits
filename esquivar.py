@@ -29,14 +29,14 @@ NUM_SPAWN_POINTS = 16
 
 
 class Game(arcade.Window):
-    players: List["UFO"]
-    projectiles: arcade.SpriteList
-    projectile_speed: int
-    projectile_frequency: int
-    projectile_counter: int
-    projectile_spawn_points: List[tuple[int, int]]
-    game_over: bool
-    high_score: int
+    #players: List["UFO"]
+    #projectiles: arcade.SpriteList
+    #projectile_speed: int
+    #projectile_frequency: int
+    #projectile_counter: int
+    #projectile_spawn_points: List[tuple[int, int]]
+    #game_over: bool
+    #high_score: int
 
     def __init__(self):
         super().__init__(
@@ -253,11 +253,11 @@ class Game(arcade.Window):
 
 
 class UFO(arcade.Sprite):
-    center_x: int
-    bottom: int
-    alive: bool
-    score: int
-    color: arcade.color
+    #center_x: int
+    #bottom: int
+    #alive: bool
+    #score: int
+    #color: arcade.color
 
     def __init__(self, filename, scale, color):
         super().__init__(filename, scale)
@@ -277,9 +277,9 @@ class UFO(arcade.Sprite):
 
 
 class Projectile(arcade.Sprite):
-    center_x: float
-    center_y: float
-    change_y: float
+    #center_x: float
+    #center_y: float
+    #change_y: float
 
     def __init__(
         self, filename, scale, center_x=0, center_y=0, projectile_speed=CHANGE_Y
