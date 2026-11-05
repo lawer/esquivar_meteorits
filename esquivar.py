@@ -1,31 +1,23 @@
 import random
-from typing import List
 
 import arcade
 
+from joc_comu import (
+    HEIGHT, PLAYER_SPEED, PROJECTILE_FREQUENCY, ROOT, SCALE, SCREEN_HEIGHT,
+    SCREEN_WIDTH, WIDTH, create_projectile, parse_seed,
+)
+
 FULL_SCREEN = False
-BASE_WIDTH = 1024
-BASE_HEIGHT = 768
-
-SCREEN_WIDTH = arcade.get_display_size()[0]
-SCREEN_HEIGHT = arcade.get_display_size()[1]
-
-# SCALE = 3
-SCALE = min(SCREEN_WIDTH // BASE_WIDTH, SCREEN_HEIGHT // BASE_HEIGHT)
-
-PLAYER_SPEED_BASE = 5
-PLAYER_SPEED = PLAYER_SPEED_BASE * SCALE
-CHANGE_Y_BASE = 5
-CHANGE_Y = CHANGE_Y_BASE * SCALE
-WIDTH = BASE_WIDTH * SCALE
-HEIGHT = BASE_HEIGHT * SCALE
-BIG_FONT_BASE = 48
-BIG_FONT = BIG_FONT_BASE * SCALE
-MED_FONT_BASE = 24
-MED_FONT = MED_FONT_BASE * SCALE
-SMALL_FONT_BASE = 22
-SMALL_FONT = SMALL_FONT_BASE * SCALE
-NUM_SPAWN_POINTS = 16
+BIG_FONT = 48 * SCALE
+MED_FONT = 24 * SCALE
+SMALL_FONT = 22 * SCALE
+CONTROLS = (
+    (arcade.key.A, arcade.key.S),
+    (arcade.key.F, arcade.key.G),
+    (arcade.key.J, arcade.key.K),
+    (arcade.key.LEFT, arcade.key.RIGHT),
+)
+JOYSTICK_DEAD_ZONE = 0.15
 
 
 class Game(arcade.Window):
@@ -38,7 +30,8 @@ class Game(arcade.Window):
     #game_over: bool
     #high_score: int
 
-    def __init__(self):
+    def __init__(self, seed=None):
+        self.seed = seed
         super().__init__(
             WIDTH,
             HEIGHT,
@@ -54,52 +47,51 @@ class Game(arcade.Window):
 
         self.players = [None] * 4
         self.projectiles = None
-        self.projectile_speed = CHANGE_Y
-        self.projectile_frequency = 30
+        self.projectile_frequency = PROJECTILE_FREQUENCY
         self.projectile_counter = 0
-        self.projectile_spawn_points = [
-            ((WIDTH * i) // NUM_SPAWN_POINTS, HEIGHT)
-            for i in range(1, NUM_SPAWN_POINTS + 1)
-        ]
         self.game_over = None
         self.score = 0
         self.high_score = 0
 
-        self.joysticks = None
+        self.joysticks = []
+        self.pressed_keys = set()
 
     def setup(self):
-        self.projectiles = arcade.SpriteList()
-        self.players[0] = UFO("images/ufoGreen.png", SCALE, arcade.color.GREEN)
-        self.players[1] = UFO("images/ufoRed.png", SCALE, arcade.color.RED)
-        self.players[2] = UFO("images/ufoBlue.png", SCALE, arcade.color.BLUE_GRAY)
-        self.players[3] = UFO("images/ufoYellow.png", SCALE, arcade.color.YELLOW)
+        self.switch_to()
+        self.meteor_rng = random.Random(self.seed)
+        # Les llistes diferides no pugen textures a OpenGL fins que es dibuixen.
+        lazy = getattr(self, "training_without_graphics", False)
+        self.projectiles = arcade.SpriteList(lazy=lazy)
+        self.visible_players = arcade.SpriteList(lazy=lazy)
+        self.players[0] = UFO(str(ROOT / "images/ufoGreen.png"), SCALE, arcade.color.GREEN)
+        self.players[1] = UFO(str(ROOT / "images/ufoRed.png"), SCALE, arcade.color.RED)
+        self.players[2] = UFO(str(ROOT / "images/ufoBlue.png"), SCALE, arcade.color.BLUE_GRAY)
+        self.players[3] = UFO(str(ROOT / "images/ufoYellow.png"), SCALE, arcade.color.YELLOW)
+        self.visible_players.extend(self.players)
 
         self.game_over = False
+        self.pressed_keys.clear()
 
         self.score = 0
 
         try:
-            with open("high_score.txt") as f:
+            with open(ROOT / "high_score.txt") as f:
                 self.high_score = int(f.read())
         except FileNotFoundError:
             self.high_score = 0
 
-        joysticks = arcade.get_joysticks()
-        # If we have any...
-        if joysticks:
-            for joystick in joysticks:
-                self.joysticks.append(joystick)
+        if not self.joysticks:
+            for joystick in arcade.get_joysticks()[:len(self.players)]:
                 joystick.open()
                 joystick.push_handlers(self)
-        else:
-            self.joysticks = []
+                self.joysticks.append(joystick)
+        self.projectile_counter = 0
         arcade.set_background_color(arcade.color.BLACK)
 
     def on_draw(self):
-        arcade.start_render()
+        self.clear()
 
-        for player in self.players:
-            player.draw()
+        self.visible_players.draw()
 
         self.projectiles.draw()
 
@@ -111,13 +103,13 @@ class Game(arcade.Window):
                 self.players[i].color,
                 MED_FONT,
             )
-            arcade.draw_text(
-                f"Score: {self.players[i].score}",
-                70 + 250 * SCALE * i,
-                HEIGHT - 85 * SCALE,
-                arcade.color.WHITE,
-                MED_FONT,
-            )
+            #arcade.draw_text(
+            #    f"Score: {self.players[i].score}",
+            #    70 + 250 * SCALE * i,
+            #    HEIGHT - 85 * SCALE,
+            #    arcade.color.WHITE,
+            #    MED_FONT,
+            #)
 
         arcade.draw_text(
             f"High Score: {self.high_score}", 50, 50, arcade.color.WHITE, SMALL_FONT
@@ -155,7 +147,9 @@ class Game(arcade.Window):
                 )
 
     def on_update(self, delta_time):
-        global CHANGE_Y
+        self.switch_to()
+        if self.game_over:
+            return
 
         self.projectile_counter += 1
 
@@ -164,7 +158,7 @@ class Game(arcade.Window):
             self.projectile_counter = 0
 
         self.projectiles.update()
-        for projectile in self.projectiles:
+        for projectile in list(self.projectiles):
             if projectile.top < 0:
                 projectile.kill()
                 self.score += 1
@@ -172,16 +166,13 @@ class Game(arcade.Window):
                     if player.alive:
                         player.score += 1
 
-                    projectile.kill()
-
-                # if self.score % 10 == 0:
-                #    self.projectile_speed += 1
-                #    self.projectile_frequency -= 1
-
-        for player in self.players:
+        for i, player in enumerate(self.players):
+            if not player.alive:
+                continue
+            player.change_x = self.player_direction(i) * PLAYER_SPEED
             player.update()
 
-            if arcade.check_for_collision_with_list(player, self.projectiles):
+            if arcade.check_for_collision_with_list(player, self.projectiles, method=3):
                 player.kill()
                 player.alive = False
 
@@ -189,30 +180,20 @@ class Game(arcade.Window):
             self.game_over = True
             if self.score > self.high_score:
                 self.high_score = self.score
-                with open("high_score.txt", "w") as f:
+                with open(ROOT / "high_score.txt", "w") as f:
                     f.write(str(self.score))
 
-        for i, joystick in enumerate(self.joysticks):
-            self.players[i].change_x = joystick.x * PLAYER_SPEED
+    def player_direction(self, index):
+        left, right = CONTROLS[index]
+        direction = int(right in self.pressed_keys) - int(left in self.pressed_keys)
+        if not direction and index < len(self.joysticks):
+            axis = self.joysticks[index].x
+            if abs(axis) > JOYSTICK_DEAD_ZONE:
+                return axis
+        return direction
 
     def create_projectile(self):
-        spawn_point = random.choice(self.projectile_spawn_points)
-        image_index = random.randint(1, 4)
-        image_name = f"images/meteorBrown_big{image_index}.png"
-        projectile = Projectile(
-            image_name,
-            SCALE,
-            center_x=spawn_point[0],
-            center_y=spawn_point[1],
-            projectile_speed=self.projectile_speed,
-        )
-        self.projectiles.append(projectile)
-
-    def game_over(self):
-        print("Game Over!")
-        self.projectiles.clear()
-
-        arcade.exit()
+        self.projectiles.append(create_projectile(self.meteor_rng, self.score))
 
     def on_key_press(self, key, modifiers):
         if key == arcade.key.ESCAPE:
@@ -220,32 +201,10 @@ class Game(arcade.Window):
         elif self.game_over:
             self.setup()
         else:
-            if key == arcade.key.A:
-                self.players[0].change_x = -PLAYER_SPEED
-            elif key == arcade.key.S:
-                self.players[0].change_x = PLAYER_SPEED
-            elif key == arcade.key.F:
-                self.players[1].change_x = -PLAYER_SPEED
-            elif key == arcade.key.G:
-                self.players[1].change_x = PLAYER_SPEED
-            elif key == arcade.key.J:
-                self.players[2].change_x = -PLAYER_SPEED
-            elif key == arcade.key.K:
-                self.players[2].change_x = PLAYER_SPEED
-            elif key == arcade.key.LEFT:
-                self.players[3].change_x = -PLAYER_SPEED
-            elif key == arcade.key.RIGHT:
-                self.players[3].change_x = PLAYER_SPEED
+            self.pressed_keys.add(key)
 
     def on_key_release(self, key, modifiers):
-        if key == arcade.key.A or key == arcade.key.S:
-            self.players[0].change_x = 0
-        elif key == arcade.key.F or key == arcade.key.G:
-            self.players[1].change_x = 0
-        elif key == arcade.key.J or key == arcade.key.K:
-            self.players[2].change_x = 0
-        elif key == arcade.key.LEFT or key == arcade.key.RIGHT:
-            self.players[3].change_x = 0
+        self.pressed_keys.discard(key)
 
     def on_joybutton_press(self, _joystick, button):
         if self.game_over:
@@ -262,12 +221,12 @@ class UFO(arcade.Sprite):
     def __init__(self, filename, scale, color):
         super().__init__(filename, scale)
         self.center_x = WIDTH // 2
-        self.bottom = 10
+        self.bottom = 10 * SCALE
         self.alive = True
         self.score = 0
         self.color = color
 
-    def update(self):
+    def update(self, delta_time=1 / 60):
         self.move_player()
 
     def move_player(self):
@@ -276,24 +235,8 @@ class UFO(arcade.Sprite):
         self.right = min(WIDTH, self.right)
 
 
-class Projectile(arcade.Sprite):
-    #center_x: float
-    #center_y: float
-    #change_y: float
-
-    def __init__(
-        self, filename, scale, center_x=0, center_y=0, projectile_speed=CHANGE_Y
-    ):
-        super().__init__(filename, scale)
-        self.center_x = center_x
-        self.center_y = center_y
-        self.change_y = projectile_speed
-
-    def update(self):
-        self.center_y -= self.change_y
-
 
 if __name__ == "__main__":
-    game = Game()
+    game = Game(seed=parse_seed())
     game.setup()
     game.run()

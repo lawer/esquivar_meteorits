@@ -1,0 +1,12 @@
+{
+  "reaction_distance": 274.40244158079093,
+  "safety_margin": 165.68840441145963,
+  "movement_threshold": 0.37153824184978224,
+  "mean_survival_frames": 6522.333333333333,
+  "seeds": [
+    42,
+    43,
+    44
+  ],
+  "max_frames": 10000
+}
