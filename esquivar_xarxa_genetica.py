@@ -1,4 +1,4 @@
-"""Xarxa neuronal d'AITK amb pesos evolucionats amb DEAP."""
+"""Xarxa neuronal d'AITK amb pesos evolucionats amb el GA d'AITK."""
 
 import json
 import random
@@ -6,10 +6,11 @@ import subprocess
 import sys
 
 import numpy as np
-from deap import algorithms, base, creator, tools
 
-from esquivar_fuzzy_adaptatiu import AdaptiveFuzzyGame, evaluate, evaluate_population
-from joc_comu import ROOT, observe
+from esquivar_fuzzy_adaptatiu import AdaptiveFuzzyGame
+from entrenament_comu import evolve
+from genetica_comuna import make_population, make_toolbox
+from joc_comu import OBSERVATION_VERSION, ROOT, observe
 from opcions_entrenament import parser_entrenament, valida_opcions
 
 MODEL_FILE = ROOT / "xarxa_genetica.json"
@@ -79,7 +80,7 @@ class NetworkWorker:
 
 
 class NeuralGame(AdaptiveFuzzyGame):
-    def __init__(self, parameters, worker, seed=None, observation_version=2):
+    def __init__(self, parameters, worker, seed=None, observation_version=OBSERVATION_VERSION):
         super().__init__(parameters, seed=seed)
         self.worker = worker
         self.observation_version = observation_version
@@ -100,66 +101,22 @@ class NeuralGame(AdaptiveFuzzyGame):
 def train(population_size, generations, max_frames, seed, visual, worker, visual_speed=4, trials=1):
     random.seed(seed)
     weight_count = worker.request("count")
-    if not hasattr(creator, "NeuralFitness"):
-        creator.create("NeuralFitness", base.Fitness, weights=(1.0,))
-        creator.create("NeuralIndividual", list, fitness=creator.NeuralFitness)
-    toolbox = base.Toolbox()
-    toolbox.register("individual", tools.initIterate, creator.NeuralIndividual,
-                     lambda: [random.uniform(-1, 1) for _ in range(weight_count)])
-    toolbox.register("population", tools.initRepeat, list, toolbox.individual)
-    toolbox.register("mate", tools.cxBlend, alpha=0.3)
-    toolbox.register("mutate", tools.mutGaussian, mu=0, sigma=0.15, indpb=0.15)
-    toolbox.register("select", tools.selTournament, tournsize=3)
-
-    def bounded(operator):
-        def wrapped(*args, **kwargs):
-            offspring = operator(*args, **kwargs)
-            for individual in offspring:
-                individual[:] = [max(-5.0, min(5.0, weight)) for weight in individual]
-            return offspring
-        return wrapped
-
-    toolbox.decorate("mate", bounded)
-    toolbox.decorate("mutate", bounded)
+    toolbox = make_toolbox('neural', weight_count, prefix='Neural')
     game = NeuralGame([], worker)
     game.training_visual = visual
     game.visual_speed = visual_speed
     game.training_without_graphics = not visual
     game.set_visible(visual)
-    seeds = [seed + i for i in range(trials)]
     try:
-        population = toolbox.population(n=population_size)
-        best = tools.HallOfFame(1)
-        print("gen  avaluacions  mitjana  millor", flush=True)
-        for generation in range(generations + 1):
-            if generation:
-                elites = [toolbox.clone(individual) for individual in tools.selBest(population, 2)]
-                selected = toolbox.select(population, len(population) - len(elites))
-                population[:] = elites + algorithms.varAnd(selected, toolbox, cxpb=0.5, mutpb=0.7)
-            worker.reset()
-            invalid = [individual for individual in population if not individual.fitness.valid]
-            if visual:
-                results = evaluate_population(game, population, seeds, max_frames,
-                                              generation, generations)
-                for individual, fitness in zip(population, results):
-                    individual.fitness.values = fitness
-                evaluations = len(population)
-            else:
-                for individual in invalid:
-                    individual.fitness.values = evaluate(game, individual, seeds, max_frames)
-                evaluations = len(invalid)
-            best.update(population)
-            scores = [individual.fitness.values[0] for individual in population]
-            game.training_history.append((sum(scores) / len(scores), max(scores)))
-            print(f"{generation:3}  {evaluations:11}  "
-                  f"{sum(scores) / len(scores):7.1f}  {max(scores):6.1f}", flush=True)
-        validation_seeds = [seed + 10000 + i for i in range(trials)]
-        validation = evaluate(game, best[0], validation_seeds, max_frames)[0]
-        print(f"Validació amb llavors noves: {validation:.1f} fotogrames de mitjana", flush=True)
-        result = {"architecture": [INPUTS, HIDDEN, OUTPUTS], "observation_version": 2,
+        population = make_population(toolbox, population_size)
+        best, seeds, validation_seeds, validation = evolve(
+            game, toolbox, population, seed, trials, generations, max_frames, visual,
+            before_generation=worker.reset,
+        )
+        result = {"architecture": [INPUTS, HIDDEN, OUTPUTS], "observation_version": OBSERVATION_VERSION,
                   "validation_seeds": validation_seeds, "validation_mean_frames": validation,
-                  "weights": list(best[0]),
-                  "mean_survival_frames": best[0].fitness.values[0],
+                  "weights": list(best),
+                  "mean_survival_frames": best.fitness.values[0],
                   "seeds": seeds, "max_frames": max_frames}
         MODEL_FILE.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
         print(f"Xarxa desada a {MODEL_FILE}")
@@ -194,7 +151,7 @@ def main():
         if len(weights) != worker.request("count"):
             parser.error("El nombre de pesos desats no és correcte")
         observation_version = data.get("observation_version", 1)
-        if observation_version != 2:
+        if observation_version != OBSERVATION_VERSION:
             parser.error("El model usa observacions antigues; torna a entrenar-lo amb --entrenar")
         game = NeuralGame(weights, worker, seed=args.llavor,
                           observation_version=observation_version)

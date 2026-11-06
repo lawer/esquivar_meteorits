@@ -10,13 +10,16 @@ import threading
 from pathlib import Path
 
 import arcade
-import neat
-from deap import algorithms, base, creator, tools
+import neat_aitk as neat
 
 from esquivar import UFO
 from esquivar_fuzzy import FuzzyGame
+from esquivar_simple import simple_direction
 from esquivar_xarxa_genetica import NetworkWorker, NeuralGame
-from joc_comu import HEIGHT, PLAYER_SPEED, PROJECTILE_FREQUENCY, ROOT, SCALE, WIDTH, create_projectile, observe
+from genetica_comuna import make_population, make_toolbox, next_population, seeds_for_trials
+from serialitzacio_neat import genome_to_data
+from joc_comu import (HEIGHT, OBSERVATION_VERSION, PLAYER_SPEED, PROJECTILE_FREQUENCY,
+                     ROOT, SCALE, WIDTH, create_projectile, observe)
 
 
 class FuzzyAgent:
@@ -35,6 +38,15 @@ class FuzzyAgent:
         return 0 if abs(result) <= self.parameters[2] else (1 if result > 0 else -1)
 
 
+class SimpleAgent:
+    def __init__(self, sprite, projectiles):
+        self.sprite = sprite
+        self.projectiles = projectiles
+
+    def direction(self):
+        return simple_direction(observe(self.sprite, self.projectiles))
+
+
 class NeuralAgent:
     player_direction = NeuralGame.player_direction
 
@@ -48,43 +60,13 @@ class NeuralAgent:
         return self.player_direction(0)
 
 
-def make_toolbox(kind, count=0):
-    if not hasattr(creator, 'ComparisonFitness'):
-        creator.create('ComparisonFitness', base.Fitness, weights=(1.0,))
-        creator.create('ComparisonIndividual', list, fitness=creator.ComparisonFitness)
-    toolbox = base.Toolbox()
-    if kind == 'fuzzy':
-        bounds = [(150., 800.), (20., 220.), (0.01, 0.45)]
-        toolbox.register('individual', tools.initIterate, creator.ComparisonIndividual,
-                         lambda: [random.uniform(a, b) for a, b in bounds])
-        toolbox.register('mutate', tools.mutGaussian, mu=0, sigma=[100, 30, 0.06], indpb=0.4)
-    else:
-        bounds = [(-5., 5.)] * count
-        toolbox.register('individual', tools.initIterate, creator.ComparisonIndividual,
-                         lambda: [random.uniform(-1, 1) for _ in range(count)])
-        toolbox.register('mutate', tools.mutGaussian, mu=0, sigma=0.15, indpb=0.15)
-    toolbox.register('population', tools.initRepeat, list, toolbox.individual)
-    toolbox.register('mate', tools.cxBlend, alpha=0.3)
-    toolbox.register('select', tools.selTournament, tournsize=3)
-
-    def bounded(operator):
-        def wrapped(*args, **kwargs):
-            children = operator(*args, **kwargs)
-            for child in children:
-                child[:] = [max(lo, min(hi, value)) for value, (lo, hi) in zip(child, bounds)]
-            return children
-        return wrapped
-    toolbox.decorate('mate', bounded)
-    toolbox.decorate('mutate', bounded)
-    return toolbox
-
-
 class ComparisonWindow(arcade.Window):
     def __init__(self, args, worker):
         super().__init__(WIDTH, HEIGHT, 'Comparació sincronitzada',
                          update_rate=1 / (60 * args.velocitat), antialiasing=False)
         self.args, self.worker = args, worker
         self.training_seed = args.llavor
+        self.training_seeds = seeds_for_trials(args.llavor, args.proves)
         random.seed(args.llavor)
         config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet,
                              neat.DefaultStagnation, str(ROOT / 'config-file.txt'))
@@ -95,10 +77,11 @@ class ComparisonWindow(arcade.Window):
         count = worker.request('count')
         self.toolbox_fuzzy = make_toolbox('fuzzy')
         self.toolbox_neural = make_toolbox('neural', count)
-        fuzzy = self.toolbox_fuzzy.population(n=args.poblacio)
+        fuzzy = make_population(self.toolbox_fuzzy, args.poblacio)
         fuzzy[0][:] = [400, 70, 0.15]
-        neural = self.toolbox_neural.population(n=args.poblacio)
+        neural = make_population(self.toolbox_neural, args.poblacio)
         self.groups = [
+            {'name': 'SIMPLE (referencia)', 'kind': 'simple', 'population': ['regles fixes'], 'best': None},
             {'name': 'FUZZY FIX (referencia)', 'kind': 'baseline', 'population': [[400, 70, 0.15]], 'best': None},
             {'name': 'FUZZY GENETIC', 'kind': 'fuzzy', 'population': fuzzy, 'best': None},
             {'name': 'XARXA GENETICA', 'kind': 'neural', 'population': neural, 'best': None},
@@ -121,12 +104,16 @@ class ComparisonWindow(arcade.Window):
         self.rng = random.Random(args.llavor)
         self.window_camera = arcade.Camera2D(window=self)
         header = 80 * SCALE
-        half_w = WIDTH / 2
-        half_h = (HEIGHT - header) / 2
+        self.cell_w = WIDTH / 3
+        self.cell_h = (HEIGHT - header) / 2
+        # Tres vistes a dalt i dues centrades a baix.
+        self.slots = [(0, 1), (1, 1), (2, 1), (0.5, 0), (1.5, 0)]
         self.cameras = []
-        for i in range(4):
-            col, row = i % 2, 1 - i // 2
-            viewport = arcade.LBWH(col * half_w, row * half_h, half_w, half_h)
+        for col, row in self.slots:
+            viewport_height = self.cell_w * HEIGHT / WIDTH
+            viewport = arcade.LBWH(col * self.cell_w,
+                                   row * self.cell_h + (self.cell_h - viewport_height) / 2,
+                                   self.cell_w, viewport_height)
             self.cameras.append(arcade.Camera2D(
                 viewport=viewport, position=(WIDTH / 2, HEIGHT / 2),
                 projection=arcade.LRBT(-WIDTH / 2, WIDTH / 2, -HEIGHT / 2, HEIGHT / 2),
@@ -152,7 +139,7 @@ class ComparisonWindow(arcade.Window):
             self.generation_ready.put(('error', exc))
 
     def new_generation(self, genomes):
-        self.groups[3]['population'] = [genome for _, genome in genomes]
+        next(group for group in self.groups if group['kind'] == 'neat')['population'] = [genome for _, genome in genomes]
         self.worker.reset()
         for group in self.groups:
             group['totals'] = [0] * len(group['population'])
@@ -164,7 +151,7 @@ class ComparisonWindow(arcade.Window):
         self.frame = 0
         self.score = 0
         self.counter = 0
-        self.rng = random.Random(self.training_seed + self.trial - 1)
+        self.rng = random.Random(self.training_seeds[self.trial - 1])
         self.projectiles = arcade.SpriteList()
         for group in self.groups:
             group['sprites'] = arcade.SpriteList()
@@ -173,7 +160,9 @@ class ComparisonWindow(arcade.Window):
             for candidate in group['population']:
                 sprite = UFO(str(ROOT / 'images/ufoGreen.png'), SCALE, arcade.color.GREEN)
                 group['sprites'].append(sprite)
-                if group['kind'] in ('baseline', 'fuzzy'):
+                if group['kind'] == 'simple':
+                    controller = SimpleAgent(sprite, self.projectiles)
+                elif group['kind'] in ('baseline', 'fuzzy'):
                     controller = FuzzyAgent(sprite, candidate, self.projectiles)
                 elif group['kind'] == 'neural':
                     controller = NeuralAgent(sprite, candidate, self.projectiles, self.worker)
@@ -244,7 +233,7 @@ class ComparisonWindow(arcade.Window):
             if group['kind'] == 'neat':
                 for candidate, score in zip(group['population'], scores):
                     candidate.fitness = score
-            elif group['kind'] != 'baseline':
+            elif group['kind'] not in ('baseline', 'simple'):
                 for candidate, score in zip(group['population'], scores):
                     candidate.fitness.values = (score,)
             if group['best'] is None or best_score > group['best']:
@@ -260,12 +249,11 @@ class ComparisonWindow(arcade.Window):
         print(f"Generació {self.generation}: " + ', '.join(
             f"{name} {stats['best']:.1f}" for name, stats in generation_results.items()), flush=True)
         if self.generation < self.args.generacions:
-            for group, toolbox in ((self.groups[1], self.toolbox_fuzzy),
-                                   (self.groups[2], self.toolbox_neural)):
-                population = group['population']
-                elites = [toolbox.clone(ind) for ind in tools.selBest(population, 2)]
-                selected = toolbox.select(population, len(population) - len(elites))
-                group['population'] = elites + algorithms.varAnd(selected, toolbox, cxpb=0.5, mutpb=0.7)
+            for group in self.groups:
+                if group['kind'] == 'fuzzy':
+                    group['population'] = next_population(group['population'], self.toolbox_fuzzy)
+                elif group['kind'] == 'neural':
+                    group['population'] = next_population(group['population'], self.toolbox_neural)
             self.generation += 1
         self.state = 'waiting'
         self.generation_done.set()
@@ -293,7 +281,7 @@ class ComparisonWindow(arcade.Window):
     def on_draw(self):
         self.clear()
         header = 80 * SCALE
-        half_w, half_h = WIDTH / 2, (HEIGHT - header) / 2
+        cell_w, cell_h = self.cell_w, self.cell_h
         leaders, provisional, live_scores = self.live_leaders() if self.state == 'running' else ([], 0, [])
         for i, (group, camera) in enumerate(zip(self.groups, self.cameras)):
             camera.use()
@@ -301,16 +289,17 @@ class ComparisonWindow(arcade.Window):
             if 'sprites' in group:
                 group['sprites'].draw()
             self.window_camera.use()
-            col, row = i % 2, 1 - i // 2
-            x, y = col * half_w, row * half_h
-            arcade.draw_lbwh_rectangle_filled(x, y + half_h - 32*SCALE, half_w, 32*SCALE, (15, 24, 39, 230))
+            col, row = self.slots[i]
+            x, y = col * cell_w, row * cell_h
+            arcade.draw_lbwh_rectangle_filled(x, y + cell_h - 38*SCALE, cell_w, 38*SCALE, (15, 24, 39, 230))
             if i in leaders:
-                arcade.draw_lbwh_rectangle_filled(x, y + half_h - 3*SCALE, half_w, 3*SCALE, arcade.color.YELLOW)
+                arcade.draw_lbwh_rectangle_filled(x, y + cell_h - 3*SCALE, cell_w, 3*SCALE, arcade.color.YELLOW)
             living = sum(result is None for result in group.get('round', []))
             last = '-' if group['best'] is None else f"{group['best']:.1f}"
             current = '-' if not live_scores else f'{live_scores[i]:.1f}'
-            self.label(f'group{i}', f"{group['name']} | Vius {living} | Actual {current} | Millor {last}",
-                       x + 8*SCALE, y + half_h - 23*SCALE, 10)
+            self.label(f'group{i}', group['name'], x + 8*SCALE, y + cell_h - 17*SCALE, 9)
+            self.label(f'stats{i}', f"Vius {living} | Actual {current} | Millor {last}",
+                       x + 8*SCALE, y + cell_h - 31*SCALE, 8)
         self.window_camera.use()
         self.label('title', f"GENERACIO {self.generation}/{self.args.generacions}  |  PROVA {self.trial}/{self.args.proves}  |  FOTOGRAMA {self.frame}/{self.args.fotogrames}",
                    10*SCALE, HEIGHT - 25*SCALE, 13, arcade.color.YELLOW)
@@ -333,27 +322,21 @@ class ComparisonWindow(arcade.Window):
         self.label('live', current, 10*SCALE, HEIGHT - 70*SCALE, 10, arcade.color.YELLOW)
 
     def save_results(self):
-        def genome_data(genome):
-            def attrs(gene):
-                return {attribute.name: getattr(gene, attribute.name)
-                        for attribute in gene._gene_attributes}
-            return {'key': genome.key, 'fitness': genome.fitness,
-                    'nodes': [{'key': key, **attrs(node)} for key, node in genome.nodes.items()],
-                    'connections': [{'key': list(key), 'innovation': connection.innovation,
-                                     **attrs(connection)}
-                                    for key, connection in genome.connections.items()]}
         models = {}
         for group in self.groups:
             candidate = group.get('best_candidate')
             if candidate is None:
                 continue
-            if group['kind'] == 'neat':
-                models[group['name']] = {'observation_version': 2, **genome_data(candidate)}
+            if group['kind'] == 'simple':
+                models[group['name']] = {'kind': 'simple', 'observation_version': OBSERVATION_VERSION}
+            elif group['kind'] == 'neat':
+                models[group['name']] = genome_to_data(candidate)
             elif group['kind'] == 'neural':
-                models[group['name']] = {'observation_version': 2, 'architecture': [7, 8, 3],
+                models[group['name']] = {'observation_version': OBSERVATION_VERSION, 'architecture': [7, 8, 3],
                                          'weights': list(candidate)}
             else:
-                models[group['name']] = {'reaction_distance': candidate[0],
+                models[group['name']] = {'observation_version': OBSERVATION_VERSION,
+                                         'reaction_distance': candidate[0],
                                          'safety_margin': candidate[1],
                                          'movement_threshold': candidate[2]}
         data = {'seed': self.training_seed, 'trials': self.args.proves,

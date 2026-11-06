@@ -6,31 +6,21 @@ import json
 import statistics
 from pathlib import Path
 
-import neat
+import neat_aitk as neat
 
+from esquivar_simple import SimpleGame
 from esquivar_fuzzy import FuzzyGame
 from esquivar_fuzzy_adaptatiu import AdaptiveFuzzyGame
 from esquivar_neat import NeatPlayGame, load_winner
+from entrenament_comu import run_episode
 from esquivar_xarxa_genetica import NeuralGame, NetworkWorker
-from joc_comu import ROOT
+from joc_comu import OBSERVATION_VERSION, ROOT
 
 
 def read_model(path):
     if not path.exists():
         raise FileNotFoundError(f"Falta {path.name}; entrena primer aquest controlador")
     return json.loads(path.read_text(encoding="utf-8"))
-
-
-def run_episode(game, seed, max_frames):
-    game.seed = seed
-    game.setup()
-    # Les partides de comparació no han d'alterar el rècord de joc.
-    game.high_score = float('inf')
-    for frame in range(1, max_frames + 1):
-        game.on_update(1 / 60)
-        if not game.players[0].alive:
-            return frame
-    return max_frames
 
 
 def compare(seeds, max_frames):
@@ -40,7 +30,9 @@ def compare(seeds, max_frames):
     fuzzy = read_model(fuzzy_path)
     neural = read_model(neural_path)
     read_model(neat_path)
-    if neural.get('observation_version') != 2 or neural.get('architecture') != [7, 8, 3]:
+    if fuzzy.get('observation_version') != OBSERVATION_VERSION:
+        raise ValueError('El model fuzzy genètic usa observacions antigues; torna a entrenar-lo')
+    if neural.get('observation_version') != OBSERVATION_VERSION or neural.get('architecture') != [7, 8, 3]:
         raise ValueError('La xarxa genètica és incompatible; torna a entrenar-la')
     config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                          neat.DefaultSpeciesSet, neat.DefaultStagnation,
@@ -53,6 +45,7 @@ def compare(seeds, max_frames):
         if len(neural['weights']) != worker.request('count'):
             raise ValueError('La xarxa genètica té un nombre de pesos incorrecte')
         controllers = [
+            ('Simple', lambda: SimpleGame()),
             ('Fuzzy', lambda: FuzzyGame()),
             ('Fuzzy genètic', lambda: AdaptiveFuzzyGame([
                 fuzzy['reaction_distance'], fuzzy['safety_margin'], fuzzy['movement_threshold']])),
@@ -109,7 +102,10 @@ def main():
     if args.proves < 1 or args.fotogrames < 1:
         parser.error('Calen almenys una prova i un fotograma')
     seeds = list(range(args.llavor, args.llavor + args.proves))
-    results = compare(seeds, args.fotogrames)
+    try:
+        results = compare(seeds, args.fotogrames)
+    except (FileNotFoundError, ValueError) as exc:
+        parser.error(str(exc))
     summaries = summarise(results, seeds, args.fotogrames)
     print('\nControlador         Mitjana   Mediana  Desv. est.  Al límit  Victòries*')
     for name, data in sorted(summaries.items(), key=lambda item: item[1]['mean_frames'], reverse=True):
@@ -118,8 +114,6 @@ def main():
     print('* Les victòries empatades es reparteixen. Puntuació en fotogrames.')
     print('Arribar al límit no indica quant de temps més hauria sobreviscut la nau.')
     fuzzy = read_model(ROOT / 'fuzzy_genetic.json')
-    if 'observation_version' not in fuzzy:
-        print('Nota: el model fuzzy genètic no indica la versió de les observacions; pot ser antic.')
     model_files = ['fuzzy_genetic.json', 'neat_genetic.json', 'xarxa_genetica.json']
     result = {'seeds': seeds, 'max_frames': args.fotogrames,
               'model_sha256': {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()

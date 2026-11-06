@@ -7,6 +7,10 @@
     {
       "generation": 0,
       "results": {
+        "SIMPLE (referencia)": {
+          "best": 219.0,
+          "mean": 219.0
+        },
         "FUZZY FIX (referencia)": {
           "best": 223.0,
           "mean": 223.0
@@ -28,6 +32,10 @@
     {
       "generation": 1,
       "results": {
+        "SIMPLE (referencia)": {
+          "best": 219.0,
+          "mean": 219.0
+        },
         "FUZZY FIX (referencia)": {
           "best": 223.0,
           "mean": 223.0
@@ -49,6 +57,10 @@
     {
       "generation": 2,
       "results": {
+        "SIMPLE (referencia)": {
+          "best": 219.0,
+          "mean": 219.0
+        },
         "FUZZY FIX (referencia)": {
           "best": 223.0,
           "mean": 223.0
@@ -70,6 +82,10 @@
     {
       "generation": 3,
       "results": {
+        "SIMPLE (referencia)": {
+          "best": 219.0,
+          "mean": 219.0
+        },
         "FUZZY FIX (referencia)": {
           "best": 223.0,
           "mean": 223.0
@@ -91,6 +107,10 @@
     {
       "generation": 4,
       "results": {
+        "SIMPLE (referencia)": {
+          "best": 219.0,
+          "mean": 219.0
+        },
         "FUZZY FIX (referencia)": {
           "best": 223.0,
           "mean": 223.0
@@ -112,6 +132,10 @@
     {
       "generation": 5,
       "results": {
+        "SIMPLE (referencia)": {
+          "best": 219.0,
+          "mean": 219.0
+        },
         "FUZZY FIX (referencia)": {
           "best": 223.0,
           "mean": 223.0
@@ -133,6 +157,10 @@
     {
       "generation": 6,
       "results": {
+        "SIMPLE (referencia)": {
+          "best": 219.0,
+          "mean": 219.0
+        },
         "FUZZY FIX (referencia)": {
           "best": 223.0,
           "mean": 223.0
@@ -154,6 +182,10 @@
     {
       "generation": 7,
       "results": {
+        "SIMPLE (referencia)": {
+          "best": 219.0,
+          "mean": 219.0
+        },
         "FUZZY FIX (referencia)": {
           "best": 223.0,
           "mean": 223.0
@@ -175,6 +207,10 @@
     {
       "generation": 8,
       "results": {
+        "SIMPLE (referencia)": {
+          "best": 219.0,
+          "mean": 219.0
+        },
         "FUZZY FIX (referencia)": {
           "best": 223.0,
           "mean": 223.0
@@ -202,6 +238,10 @@
     "generation": 1
   },
   "models": {
+    "SIMPLE (referencia)": {
+      "kind": "simple",
+      "observation_version": 2
+    },
     "FUZZY FIX (referencia)": {
       "reaction_distance": 400,
       "safety_margin": 70,

@@ -5,7 +5,7 @@ import threading
 import time
 
 import arcade
-import neat
+import neat_aitk as neat
 
 from joc_comu import (
     HEIGHT, PLAYER_SPEED, PROJECTILE_FREQUENCY, ROOT, SCALE, SCREEN_HEIGHT,
@@ -14,6 +14,8 @@ from joc_comu import (
 
 from esquivar import Game as ManualGame
 from panell_entrenament import TrainingPanel
+from genetica_comuna import seeds_for_trials
+from serialitzacio_neat import genome_from_data, genome_to_data
 from opcions_entrenament import parser_entrenament, valida_opcions
 
 MODEL_FILE = ROOT / "neat_genetic.json"
@@ -267,7 +269,7 @@ def run_neat(seed=42, population_size=12, generations=8, max_frames=1800,
 
     GAME = Game(seed=seed, visual=visual, visual_speed=visual_speed,
                 max_frames=max_frames, trials=trials)
-    GAME.training_seeds = [seed + i for i in range(trials)]
+    GAME.training_seeds = seeds_for_trials(seed, trials)
     population.add_reporter(PanelReporter(GAME))
 
     def evolve():
@@ -276,7 +278,7 @@ def run_neat(seed=42, population_size=12, generations=8, max_frames=1800,
             winner = population.run(eval_genomes, generations + 1)
             training_fitness = winner.fitness
             evaluate_trials([(winner.key, winner)], config,
-                            [seed + 10000 + i for i in range(trials)])
+                            seeds_for_trials(seed, trials, validation=True))
             print(f"Validació amb llavors noves: {winner.fitness:.1f} fotogrames de mitjana", flush=True)
             winner.fitness = training_fitness
         except TrainingInterrupted:
@@ -313,39 +315,12 @@ def run_neat(seed=42, population_size=12, generations=8, max_frames=1800,
 
 
 def save_winner(genome):
-    def attributes(gene):
-        return {attribute.name: getattr(gene, attribute.name)
-                for attribute in gene._gene_attributes}
-    data = {
-        "observation_version": 2,
-        "key": genome.key,
-        "fitness": genome.fitness,
-        "nodes": [{"key": key, **attributes(node)} for key, node in genome.nodes.items()],
-        "connections": [{"key": list(key), "innovation": connection.innovation,
-                         **attributes(connection)}
-                        for key, connection in genome.connections.items()],
-    }
-    MODEL_FILE.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    MODEL_FILE.write_text(json.dumps(genome_to_data(genome), indent=2) + "\n", encoding="utf-8")
 
 
 def load_winner(config):
     data = json.loads(MODEL_FILE.read_text(encoding="utf-8"))
-    if data.get("observation_version") != 2:
-        raise ValueError("El model NEAT usa observacions incompatibles")
-    genome = neat.DefaultGenome(data["key"])
-    genome.fitness = data["fitness"]
-    for entry in data["nodes"]:
-        node = config.genome_config.node_gene_type(entry["key"])
-        for attribute in node._gene_attributes:
-            setattr(node, attribute.name, entry[attribute.name])
-        genome.nodes[node.key] = node
-    for entry in data["connections"]:
-        connection = config.genome_config.connection_gene_type(
-            tuple(entry["key"]), innovation=entry["innovation"])
-        for attribute in connection._gene_attributes:
-            setattr(connection, attribute.name, entry[attribute.name])
-        genome.connections[connection.key] = connection
-    return genome
+    return genome_from_data(data, config)
 
 
 class NeatPlayGame(ManualGame):
@@ -379,7 +354,10 @@ def main():
     config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction,
                                 neat.DefaultSpeciesSet, neat.DefaultStagnation,
                                 str(ROOT / "config-file.txt"))
-    genome = load_winner(config)
+    try:
+        genome = load_winner(config)
+    except ValueError as exc:
+        parser.error(f"{exc}; torna a entrenar-lo amb --entrenar")
     game = NeatPlayGame(neat.nn.FeedForwardNetwork.create(genome, config), seed=args.llavor)
     game.setup()
     game.run()

@@ -36,25 +36,26 @@ def create_projectile(rng, score=0):
 
 
 OBSERVATION_SIZE = 7
+OBSERVATION_VERSION = 3
 
 
 def observe(player, projectiles):
-    """Posició normalitzada i informació dels tres impactes més pròxims.
+    """Posició normalitzada i informació dels tres meteorits més pròxims verticalment.
 
     Cada parell conté el desplaçament lateral relatiu a la zona de perill
-    i el temps fins a l'altura de la nau, normalitzat a 180 fotogrames.
-    Un parell (0, 1) representa una amenaça absent o encara llunyana.
+    i la separació vertical normalitzada per l'altura del camp.
+    Un parell (0, 1) representa un meteorit absent o llunyà.
+    No s'utilitzen la velocitat ni el temps estimat d'impacte.
     """
-    threats = [m for m in projectiles
-               if m.change_y > 0 and m.bottom >= player.top - m.height]
-    threats.sort(key=lambda m: max(0, m.bottom - player.top) / m.change_y)
+    threats = [m for m in projectiles if m.bottom >= player.top - m.height]
+    threats.sort(key=lambda m: max(0, m.bottom - player.top))
     inputs = [2 * player.center_x / WIDTH - 1]
     for meteor in threats[:3]:
         distance = meteor.center_x - player.center_x
         danger_width = max(120 * SCALE, (meteor.width + player.width) / 2)
         lateral = max(-1.0, min(1.0, distance / danger_width))
-        time_to_impact = max(0, meteor.bottom - player.top) / meteor.change_y
-        inputs.extend((lateral, min(1.0, time_to_impact / 180)))
+        vertical = max(0, meteor.bottom - player.top) / HEIGHT
+        inputs.extend((lateral, min(1.0, vertical)))
     inputs.extend((0, 1) * (3 - min(3, len(threats))))
     return tuple(inputs)
 

@@ -5,7 +5,7 @@ import numpy as np
 import skfuzzy as fuzz
 
 from esquivar import Game
-from joc_comu import observe, parse_seed
+from joc_comu import BASE_HEIGHT, observe, parse_seed
 
 UNIVERSE = np.linspace(0, 1, 101)
 CLOSE = fuzz.trimf(UNIVERSE, [0, 0, 1])
@@ -31,20 +31,20 @@ class FuzzyGame(Game):
         player = self.players[0]
         position, *threats = observe(player, self.projectiles)
         reaction_distance, safety_margin = self.fuzzy_parameters()
-        # La distància de reacció s'expressa com a temps a la velocitat inicial.
-        reaction_time = reaction_distance / 5
+        # Els paràmetres són posicions relatives al camp, sense velocitat.
+        proximity_limit = reaction_distance / BASE_HEIGHT
         lateral_limit = (60 + safety_margin) / 120
         push_left = 0.0
         push_right = 0.0
         details = []
-        for offset, time_fraction in zip(threats[::2], threats[1::2]):
-            distance = min(1.0, time_fraction * 180 / reaction_time)
+        for offset, height_fraction in zip(threats[::2], threats[1::2]):
+            distance = min(1.0, height_fraction / proximity_limit)
             near = fuzz.interp_membership(UNIVERSE, CLOSE, distance)
             lateral_distance = min(1.0, abs(offset) / lateral_limit)
             aligned = fuzz.interp_membership(UNIVERSE, ALIGNED, lateral_distance)
             risk = min(near, aligned)
             if getattr(self, "_inspect_controller", False):
-                details.append({"time": time_fraction * 180, "offset": abs(offset),
+                details.append({"height": height_fraction, "offset": abs(offset),
                                 "near": float(near), "aligned": float(aligned),
                                 "risk": float(risk)})
             if offset >= 0:
@@ -64,10 +64,10 @@ class FuzzyGame(Game):
             self.controller_debug = {"kind": "fuzzy", "observations": (position, *threats),
                                      "parameters": list(self.parameters), "left": push_left,
                                      "right": push_right, "result": result,
-                                     "reaction_time": reaction_time,
+                                     "proximity_limit": proximity_limit,
                                      "lateral_limit": lateral_limit,
                                      "threat": max(
-                                         (item for item in details if item["time"] < 180),
+                                         (item for item in details if item["height"] < 1),
                                          key=lambda item: item["risk"], default=None)}
         return result
 

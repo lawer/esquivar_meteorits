@@ -7,7 +7,6 @@ requires-python = ">=3.13"
 dependencies = [
     "aitk>=3.1.0",
     "arcade>=3.3.3",
-    "deap>=1.4",
     "graphviz>=0.21",
     "neat-python>=2.0.0",
     "numpy>=1.24",

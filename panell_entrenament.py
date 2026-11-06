@@ -146,9 +146,9 @@ class TrainingPanel:
         self.label('observation', f"Posicio {values[0]:+.2f} | entrades normalitzades", x, y, 10)
         y -= 19*s
         for i in range(3):
-            lateral, time = values[1 + 2*i:3 + 2*i]
-            text = (f"M{i+1}  lluny o absent" if time >= 1 else
-                    f"M{i+1}  lateral {lateral:+.2f}   temps {time:.2f}")
+            lateral, height = values[1 + 2*i:3 + 2*i]
+            text = (f"M{i+1}  lluny o absent" if height >= 1 else
+                    f"M{i+1}  lateral {lateral:+.2f}   altura {height:.2f}")
             self.label(f'threat{i}', text, x, y, 10)
             y -= 18*s
         if snapshot['kind'] == 'fuzzy':
@@ -157,8 +157,8 @@ class TrainingPanel:
             threat = snapshot['threat']
             selected = 'Punt blanc: amenaca de major risc' if threat else 'Sense amenaces proximes'
             self.label('fuzzy_selected', selected, x, y - 19*s, 9)
-            y = self.curve('near', x, y - 40*s, 'PROXIMITAT / temps fins a impacte (fot.)',
-                           snapshot['reaction_time'], threat['time'] if threat else None, 180, BLUE)
+            y = self.curve('near', x, y - 40*s, 'PROXIMITAT / distancia vertical normalitzada',
+                           snapshot['proximity_limit'], threat['height'] if threat else None, 1, BLUE)
             y = self.curve('aligned', x, y - 20*s, 'ALINEACIO / distancia lateral normalitzada',
                            snapshot['lateral_limit'], threat['offset'] if threat else None, 1, GOLD)
             self.label('fuzzy_result', f"Forca E {snapshot['left']:.2f} | D {snapshot['right']:.2f} | resultat {snapshot['result']:+.2f}", x, y, 10)
