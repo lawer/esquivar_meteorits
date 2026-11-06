@@ -238,7 +238,8 @@ def train(population_size, generations, max_frames, seed, visual=False, visual_s
         validation_seeds = [seed + 10000 + i for i in range(trials)]
         validation = evaluate(game, best[0], validation_seeds, max_frames)[0]
         print(f"Validació amb llavors noves: {validation:.1f} fotogrames de mitjana", flush=True)
-        result = {"validation_seeds": validation_seeds, "validation_mean_frames": validation,
+        result = {"observation_version": 2,
+                  "validation_seeds": validation_seeds, "validation_mean_frames": validation,
                   "reaction_distance": best[0][0], "safety_margin": best[0][1],
                   "movement_threshold": best[0][2],
                   "mean_survival_frames": best[0].fitness.values[0],
